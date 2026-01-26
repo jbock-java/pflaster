@@ -29,7 +29,7 @@ Press up or down arrow key to cancel the timeout.
 Then, navigate to the first option "Install Fedora".
 Press "e" to edit the installer's kernel command line options.
 
-At the end of the relevant line, add an option `inst.ks=http://192.168.178.22:3000/manual.cfg`,
+At the end of the line starting with "linux", add an option `inst.ks=http://192.168.178.22:3000/manual.cfg`,
 assuming your http server runs on `192.168.178.22`.
 
 ### TODO
