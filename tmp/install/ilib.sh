@@ -1,3 +1,5 @@
+installbase=/tmp/install
+
 get_path() {
   lsblk -n --filter "KNAME=='$1'" -o PATH
 }
@@ -6,9 +8,19 @@ get_parts() {
   lsblk -n --filter "PKNAME=='$1'" -o KNAME
 }
 
+configure_repos() {
+  sed -i "s|^enabled=.*|enabled=0|" /etc/yum.repos.d/*.repo
+  sed -i -E \
+    -e 's/^(\[.*\])$/\1\nsslverify=0/' \
+    -e "s|^countme=.*|countme=0|" \
+    -e "s|^enabled=.*|enabled=1|" \
+    /etc/yum.repos.d/fedora.repo
+}
+
 dnf_setup() {
   [[ -e /etc/yum.repos.d ]] && return 0
   ln -f -s -T /etc/anaconda.repos.d /etc/yum.repos.d
+  configure_repos
 }
 
 os_release() {
@@ -19,31 +31,62 @@ dnf_install() {
   dnf4 -y install --nogpgcheck --releasever=$(os_release) "$@"
 }
 
-get_disk() {
-  lsblk -n --filter "TYPE=='disk' && MOUNTPOINT!='[SWAP]'" -o KNAME
+get_disks() {
+  lsblk -n --filter "TYPE=='disk' && RM==0 && MOUNTPOINT!='[SWAP]'" -o KNAME | tr '\n' ' '
 }
 
-print_create_esp() {
+get_disk() {
+  if [[ -f $installbase/disk ]]; then
+    cat $installbase/disk
+    return 0
+  fi
+  local disks REPLY
+  disks=$(get_disks)
+  disks=${disks% }
+  if [[ ${disks/ /} = "$disks" ]]; then
+    echo $disks | tee $installbase/disk
+  else
+    lsblk
+    read -r -p "Please choose disk for installation [${disks// /|}]: "
+    echo $REPLY | tee $installbase/disk
+  fi
+}
+
+print_parted_commands() {
+  local rootsize=16384
+  local homesize=4096
+  local efisize=2048
+  local pos=1
   echo "mklabel gpt"
-  echo "mkpart efisys fat32 1MiB 1025MiB"
+  echo "mkpart efisys fat32 ${pos}MiB $(( pos + efisize ))MiB"
+  (( pos += efisize ))
   echo "set 1 esp on"
+  echo "mkpart linuxroot ext4 ${pos}MiB $(( pos + rootsize ))MiB"
+  (( pos += rootsize ))
+  echo "mkpart linuxhome ext4 ${pos}MiB $(( pos + homesize ))MiB"
+  (( pos += homesize ))
 }
 
 # This clears the partition table. I hope you know what you're doing.
-create_esp() {
-  local disk part
-  disk=$(get_disk)
-  parted -s $(get_path $disk) -- $(print_create_esp)
-  part=$(get_parts $device)
-  [[ $part = *$'\n'* ]] || {
-    echo "expecting only one partition on $device"
-  }
-  mkfs.vfat -F 32 $(get_path $part)
+create_parts() {
+  local disk part disk_path
+  get_disk
+  disk=$(< $installbase/disk)
+  disk_path=$(get_path $disk)
+  [[ $disk_path ]] || return 1
+  parted --script $disk_path -- $(print_parted_commands) || return 1
+  partitions=$(get_parts $disk)
+  echo "partitions: $partitions"
+  #[[ $part = *$'\n'* ]] || {
+  #  echo "expecting only one partition on $disk"
+  #}
+  #mkfs.vfat -F 32 $(get_path $part)
 }
 
 install_sdboot() {
   local disk
-  disk=$(get_disk)
+  get_disk
+  disk=$(< $installbase/disk)
   echo "disk: $disk"
   #mkdir -p /new_system/esp
   #mount /dev/sda2 /new_system/esp
