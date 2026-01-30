@@ -1,5 +1,9 @@
 installbase=/tmp/install
 
+by_partlabel() {
+  blkid -o device -t PARTLABEL=$1
+}
+
 get_path() {
   lsblk -n --filter "KNAME=='$1'" -o PATH
 }
@@ -75,12 +79,12 @@ create_parts() {
   disk_path=$(get_path $disk)
   [[ $disk_path ]] || return 1
   parted --script $disk_path -- $(print_parted_commands) || return 1
-  partitions=$(get_parts $disk)
-  echo "partitions: $partitions"
+  mkfs.vfat -n efisys -F 32 $(by_partlabel efisys)
+  mkfs.ext4 -L linuxroot $(by_partlabel linuxroot)
+  mkfs.ext4 -L linuxhome $(by_partlabel linuxhome)
   #[[ $part = *$'\n'* ]] || {
   #  echo "expecting only one partition on $disk"
   #}
-  #mkfs.vfat -F 32 $(get_path $part)
 }
 
 install_sdboot() {
