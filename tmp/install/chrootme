@@ -1,0 +1,3 @@
+#!/bin/bash
+
+exec chroot /mnt/sysroot /bin/bash

@@ -1,0 +1,8 @@
+#!/bin/bash
+
+do_postinstall() {
+  :
+  #kernel-install add -v
+}
+
+do_postinstall

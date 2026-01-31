@@ -33,7 +33,7 @@ os_release() {
 }
 
 dnf_install() {
-  rpm --quiet -q $1 && return 0
+  if type rpm 2> /dev/null && rpm --quiet -q $1; then return 0; fi
   dnf4 -y install --nogpgcheck --releasever=$(os_release) "$@"
 }
 
@@ -107,17 +107,25 @@ install_sdboot() {
   #efibootmgr -c -d /dev/sda -p 2 -l "\sd-boot\systemd-bootx64.efi" -L "fedora sd-boot"
 }
 
-create_config() {
-  [[ -e $sysroot/usr ]] || return 1
-  [[ -f $sysroot/etc/machine-id ]] && return 0
-  mkdir -p $sysroot/etc/kernel
-  head -c 16 /dev/urandom | od -A n -t x1 | sed 's/ //g' > $sysroot/etc/machine-id
-  {
-    echo "layout=bls"
-    echo "BOOT_ROOT=/boot/efi"
-  } >> $sysroot/etc/kernel/install.conf
+rootfs_configure_hostname() {
+  mkdir -p $sysroot/etc
+  # todo: take hostname from cmdline, or ask the user
   echo "box" > $sysroot/etc/hostname
-  # todo kernel-install (in chroot)
+}
+
+rootfs_configure_machine_id() {
+  mkdir -p $sysroot/etc
+  head -c 16 /dev/urandom | od -A n -t x1 | sed 's/ //g' > $sysroot/etc/machine-id
+}
+
+rootfs_copy_kernel_install_conf() {
+  mkdir -p $sysroot/etc/kernel
+  cp $installbase/install.conf $sysroot/etc/kernel/install.conf
+}
+
+rootfs_copy_postinstall() {
+  mkdir -p $sysroot/root
+  cp $installbase/postinstall $sysroot/root/postinstall
 }
 
 install_rootfs() {
@@ -156,10 +164,14 @@ install_tools() {
 do_everything() {
   install_tools || return $?
   create_partitions || return $?
-  #install sdboot
+  #todo: install sdboot
   mount_sysroot || return $?
   install_rootfs || return $?
-  create_config
+  rootfs_configure_hostname || return $?
+  rootfs_configure_machine_id || return $?
+  rootfs_copy_kernel_install_conf || return $?
+  rootfs_copy_postinstall || return $?
+  chroot $sysroot /root/postinstall
 }
 
 try_again() {
