@@ -33,6 +33,7 @@ os_release() {
 }
 
 dnf_install() {
+  rpm --quiet -q $1 && return 0
   dnf4 -y install --nogpgcheck --releasever=$(os_release) "$@"
 }
 
@@ -63,7 +64,7 @@ print_parted_commands() {
   local efisize=2048
   local pos=1
   echo "mklabel gpt"
-  echo "mkpart efisys fat32 ${pos}MiB $(( pos + efisize ))MiB"
+  echo "mkpart EFISYS fat32 ${pos}MiB $(( pos + efisize ))MiB"
   (( pos += efisize ))
   echo "set 1 esp on"
   echo "mkpart linuxroot ext4 ${pos}MiB $(( pos + rootsize ))MiB"
@@ -72,7 +73,7 @@ print_parted_commands() {
   (( pos += homesize ))
 }
 
-# This clears the partition table. I hope you know what you're doing.
+# WARNING! This clears the partitions table.
 create_partitions() {
   local disk part disk_path
   get_disk
@@ -80,9 +81,9 @@ create_partitions() {
   disk_path=$(get_path $disk)
   [[ $disk_path ]] || return 1
   parted --script $disk_path -- $(print_parted_commands) || return $?
-  mkfs.vfat -n efisys -F 32 $(by_partlabel efisys) || return $?
-  mkfs.ext4 -L linuxroot $(by_partlabel linuxroot) || return $?
-  mkfs.ext4 -L linuxhome $(by_partlabel linuxhome)
+  mkfs.vfat -n EFISYS -F 32 $(by_partlabel EFISYS) || return $?
+  mkfs.ext4 -q -L linuxroot $(by_partlabel linuxroot) <<< y || return $?
+  mkfs.ext4 -q -L linuxhome $(by_partlabel linuxhome) <<< y
 }
 
 mount_sysroot() {
@@ -95,7 +96,7 @@ mount_sysroot() {
 
 install_sdboot() {
   local device
-  device=$(blkid --label efisys)
+  device=$(blkid --label EFISYS)
   mkdir -p $sysroot/boot/efi
   disk=$(< $installbase/disk)
   echo "disk: $disk"
@@ -127,7 +128,7 @@ install_rootfs() {
      --info=flist2,name,progress2 \
      --no-inc-recursive \
      --exclude /dev/ \
-     --exclude /proc/
+     --exclude /proc/ \
      --exclude "/tmp/*" \
      --exclude /sys/ \
      --exclude /run/ \
@@ -151,12 +152,13 @@ install_tools() {
   dnf_install ${deps[@]}
 }
 
+# WARNING! This clears the partitions table.
 do_everything() {
-  install_tools
-  create_partitions
+  install_tools || return $?
+  create_partitions || return $?
   #install sdboot
-  mount_sysroot
-  install_rootfs
+  mount_sysroot || return $?
+  install_rootfs || return $?
   create_config
 }
 
