@@ -1,4 +1,5 @@
 installbase=/tmp/install
+sysroot=/mnt/sysroot
 
 by_partlabel() {
   blkid -o device -t PARTLABEL=$1
@@ -72,24 +73,30 @@ print_parted_commands() {
 }
 
 # This clears the partition table. I hope you know what you're doing.
-create_parts() {
+create_partitions() {
   local disk part disk_path
   get_disk
   disk=$(< $installbase/disk)
   disk_path=$(get_path $disk)
   [[ $disk_path ]] || return 1
-  parted --script $disk_path -- $(print_parted_commands) || return 1
-  mkfs.vfat -n efisys -F 32 $(by_partlabel efisys)
-  mkfs.ext4 -L linuxroot $(by_partlabel linuxroot)
+  parted --script $disk_path -- $(print_parted_commands) || return $?
+  mkfs.vfat -n efisys -F 32 $(by_partlabel efisys) || return $?
+  mkfs.ext4 -L linuxroot $(by_partlabel linuxroot) || return $?
   mkfs.ext4 -L linuxhome $(by_partlabel linuxhome)
-  #[[ $part = *$'\n'* ]] || {
-  #  echo "expecting only one partition on $disk"
-  #}
+}
+
+mount_sysroot() {
+  [[ -e $sysroot ]] && return 0
+  mkdir -p $sysroot
+  local device
+  device=$(blkid --label linuxroot)
+  mount $device $sysroot
 }
 
 install_sdboot() {
-  local disk
-  get_disk
+  local device
+  device=$(blkid --label efisys)
+  mkdir -p $sysroot/boot/efi
   disk=$(< $installbase/disk)
   echo "disk: $disk"
   #mkdir -p /new_system/esp
@@ -99,26 +106,38 @@ install_sdboot() {
   #efibootmgr -c -d /dev/sda -p 2 -l "\sd-boot\systemd-bootx64.efi" -L "fedora sd-boot"
 }
 
-populate_system() {
-  mkdir -p /mnt/sysroot
-  #mount /dev/sda1 /mnt/sysroot
-  #rsync \
-  #   -pogAXtlHrDx \
-  #   --stats \
-  #   --info=flist2,name,progress2 \
-  #   --no-inc-recursive \
-  #   --exclude /dev/ \
-  #   --exclude /proc/
-  #   --exclude "/tmp/*" \
-  #   --exclude /sys/ \
-  #   --exclude /run/ \
-  #   --exclude "/boot/*rescue*" \
-  #   --exclude /boot/loader/ \
-  #   --exclude /boot/efi/ \
-  #   --exclude /etc/machine-id \
-  #   --exclude /etc/machine-info \
-  #   /run/rootfsbase/ \
-  #   /mnt/sysroot
+create_config() {
+  [[ -e $sysroot/usr ]] || return 1
+  [[ -f $sysroot/etc/machine-id ]] && return 0
+  mkdir -p $sysroot/etc/kernel
+  head -c 16 /dev/urandom | od -A n -t x1 | sed 's/ //g' > $sysroot/etc/machine-id
+  {
+    echo "layout=bls"
+    echo "BOOT_ROOT=/boot/efi"
+  } >> $sysroot/etc/kernel/install.conf
+  echo "box" > $sysroot/etc/hostname
+  # todo kernel-install (in chroot)
+}
+
+install_rootfs() {
+  [[ -e $sysroot ]] || return 1
+  rsync \
+     -pogAXtlHrDx \
+     --stats \
+     --info=flist2,name,progress2 \
+     --no-inc-recursive \
+     --exclude /dev/ \
+     --exclude /proc/
+     --exclude "/tmp/*" \
+     --exclude /sys/ \
+     --exclude /run/ \
+     --exclude "/boot/*rescue*" \
+     --exclude /boot/loader/ \
+     --exclude /boot/efi/ \
+     --exclude /etc/machine-id \
+     --exclude /etc/machine-info \
+     /run/rootfsbase/ \
+     $sysroot
 }
 
 install_tools() {
@@ -130,6 +149,15 @@ install_tools() {
   )
   dnf_setup
   dnf_install ${deps[@]}
+}
+
+do_everything() {
+  install_tools
+  create_partitions
+  #install sdboot
+  mount_sysroot
+  install_rootfs
+  create_config
 }
 
 try_again() {
