@@ -9,10 +9,6 @@ get_path() {
   lsblk -n --filter "KNAME=='$1'" -o PATH
 }
 
-get_parts() {
-  lsblk -n --filter "PKNAME=='$1'" -o KNAME
-}
-
 get_uuid() {
   lsblk -n --filter "LABEL == '$1'" -o UUID
 }
@@ -53,11 +49,11 @@ get_disk() {
   disks=$(get_disks)
   disks=${disks% }
   if [[ ${disks/ /} = "$disks" ]]; then
-    echo $disks | tee $installbase/disk
+    echo $disks > $installbase/disk
   else
     lsblk
     read -r -p "Please choose disk for installation [${disks// /|}]: "
-    echo $REPLY | tee $installbase/disk
+    echo $REPLY > $installbase/disk
   fi
 }
 
@@ -89,7 +85,7 @@ create_partitions() {
   mkfs.ext4 -q -L linuxhome $(by_partlabel linuxhome) <<< y
 }
 
-mount_sysroot() {
+mount_rootfs() {
   [[ -e $sysroot ]] && return 0
   mkdir -p $sysroot
   local device
@@ -97,17 +93,25 @@ mount_sysroot() {
   mount $device $sysroot
 }
 
-install_sdboot() {
-  local device
-  device=$(blkid --label EFISYS)
+mount_efisys() {
   mkdir -p $sysroot/boot/efi
+  get_disk
   disk=$(< $installbase/disk)
-  echo "disk: $disk"
-  #mkdir -p /new_system/esp
-  #mount /dev/sda2 /new_system/esp
-  #mkdir -p /new_system/esp/sd-boot/
-  #cp /usr/lib/systemd/boot/efi/systemd-bootx64.efi /new_system/esp/sd-boot/
-  #efibootmgr -c -d /dev/sda -p 2 -l "\sd-boot\systemd-bootx64.efi" -L "fedora sd-boot"
+  local efisys
+  efisys=$(blkid --label EFISYS)
+  [[ $efisys ]] || return 1
+  mkdir -p $sysroot/boot/efi
+  mount $efisys $sysroot/boot/efi
+}
+
+install_sdboot() {
+  [[ -e $sysroot/boot/efi ]] || return 1
+  local bootnum bootnums
+  bootnums=$(efibootmgr | sed -n -E 's/^Boot([0-9]+).*\bLinux Boot Manager\b.*$/\1/p')
+  for bootnum in $bootnums; do
+    efibootmgr --bootnum $bootnum --delete-bootnum
+  done
+  bootctl install --esp-path=$sysroot/boot/efi
 }
 
 rootfs_configure_hostname() {
@@ -146,10 +150,16 @@ rootfs_copy_root_config() {
   cp /root/.vimrc $sysroot/root/.vimrc
 }
 
+rootfs_copy_install() {
+  mkdir -p $sysroot/usr/bin
+  cp /usr/bin/install $sysroot/usr/bin/install
+}
+
 run_postinstall() {
   mkdir -p $sysroot/root
   cp $installbase/postinstall $sysroot/root/postinstall
-  chroot $sysroot /root/postinstall
+  #todo
+  #chroot $sysroot /root/postinstall
 }
 
 install_rootfs() {
@@ -186,8 +196,7 @@ install_tools() {
 do_everything() {
   install_tools || return $?
   create_partitions || return $?
-  #todo: install sdboot
-  mount_sysroot || return $?
+  mount_rootfs || return $?
   install_rootfs || return $?
   rootfs_configure_hostname || return $?
   rootfs_configure_machine_id || return $?
@@ -195,6 +204,9 @@ do_everything() {
   rootfs_configure_fstab || return $?
   rootfs_copy_kernel_install_conf || return $?
   rootfs_copy_root_config || return $?
+  rootfs_copy_install || return $?
+  mount_efisys || return $?
+  install_sdboot || return $?
   run_postinstall
 }
 

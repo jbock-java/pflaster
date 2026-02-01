@@ -2,7 +2,10 @@
 
 do_postinstall() {
   rm -rf /boot/loader
-  kernel-install add -v
+  kernel-install add -v || return 1
+  rm -f /usr/bin/install
 }
 
-do_postinstall
+return || {
+  do_postinstall
+}
