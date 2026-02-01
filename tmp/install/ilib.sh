@@ -13,6 +13,10 @@ get_parts() {
   lsblk -n --filter "PKNAME=='$1'" -o KNAME
 }
 
+get_uuid() {
+  lsblk -n --filter "LABEL == '$1'" -o UUID
+}
+
 configure_repos() {
   sed -i "s|^enabled=.*|enabled=0|" /etc/yum.repos.d/*.repo
   sed -i -E \
@@ -33,8 +37,7 @@ os_release() {
 }
 
 dnf_install() {
-  if type rpm 2> /dev/null && rpm --quiet -q $1; then return 0; fi
-  dnf4 -y install --nogpgcheck --releasever=$(os_release) "$@"
+  dnf4 -qy install --nogpgcheck --releasever=$(os_release) "$@"
 }
 
 get_disks() {
@@ -118,22 +121,42 @@ rootfs_configure_machine_id() {
   head -c 16 /dev/urandom | od -A n -t x1 | sed 's/ //g' > $sysroot/etc/machine-id
 }
 
+rootfs_configure_cmdline() {
+  mkdir -p $sysroot/etc/kernel
+  echo "root=UUID=$(get_uuid linuxroot) ro" > $sysroot/etc/kernel/cmdline
+}
+
+print_fstab() {
+  echo "UUID=$(get_uuid linuxroot) /         ext4 x-systemd.device-timeout=0 0 0"
+  echo "UUID=$(get_uuid EFISYS   ) /boot/efi vfat umask=0077,shortname=winnt 0 2"
+}
+
+rootfs_configure_fstab() {
+  mkdir -p $sysroot/etc
+  print_fstab >> $sysroot/etc/fstab
+}
+
 rootfs_copy_kernel_install_conf() {
   mkdir -p $sysroot/etc/kernel
   cp $installbase/install.conf $sysroot/etc/kernel/install.conf
 }
 
-rootfs_copy_postinstall() {
+rootfs_copy_root_config() {
+  cat $installbase/aliases.sh >> $sysroot/root/.bashrc
+  cp /root/.vimrc $sysroot/root/.vimrc
+}
+
+run_postinstall() {
   mkdir -p $sysroot/root
   cp $installbase/postinstall $sysroot/root/postinstall
+  chroot $sysroot /root/postinstall
 }
 
 install_rootfs() {
   [[ -e $sysroot ]] || return 1
   rsync \
      -pogAXtlHrDx \
-     --stats \
-     --info=flist2,name,progress2 \
+     --info=progress2 \
      --no-inc-recursive \
      --exclude /dev/ \
      --exclude /proc/ \
@@ -153,7 +176,6 @@ install_tools() {
   local deps
   deps=(
     systemd-boot-unsigned
-    rpm
     vim-enhanced
   )
   dnf_setup
@@ -169,9 +191,11 @@ do_everything() {
   install_rootfs || return $?
   rootfs_configure_hostname || return $?
   rootfs_configure_machine_id || return $?
+  rootfs_configure_cmdline || return $?
+  rootfs_configure_fstab || return $?
   rootfs_copy_kernel_install_conf || return $?
-  rootfs_copy_postinstall || return $?
-  chroot $sysroot /root/postinstall
+  rootfs_copy_root_config || return $?
+  run_postinstall
 }
 
 try_again() {
