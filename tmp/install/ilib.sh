@@ -32,6 +32,10 @@ os_release() {
   sed -n -E 's/^VERSION_ID=(\S+)/\1/p' /etc/os-release
 }
 
+dnf_install_rootfs() {
+  dnf4 -qy install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+}
+
 dnf_install() {
   dnf4 -qy install --nogpgcheck --releasever=$(os_release) "$@"
 }
@@ -115,17 +119,20 @@ install_sdboot() {
 }
 
 rootfs_configure_hostname() {
+  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc
   # todo: take hostname from cmdline, or ask the user
   echo "box" > $sysroot/etc/hostname
 }
 
 rootfs_configure_machine_id() {
+  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc
   head -c 16 /dev/urandom | od -A n -t x1 | sed 's/ //g' > $sysroot/etc/machine-id
 }
 
 rootfs_configure_cmdline() {
+  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc/kernel
   echo "root=UUID=$(get_uuid linuxroot) ro" > $sysroot/etc/kernel/cmdline
 }
@@ -136,28 +143,38 @@ print_fstab() {
 }
 
 rootfs_configure_fstab() {
+  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc
   print_fstab >> $sysroot/etc/fstab
 }
 
 rootfs_copy_kernel_install_conf() {
+  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc/kernel
   cp $installbase/install.conf $sysroot/etc/kernel/install.conf
 }
 
 rootfs_copy_root_config() {
+  [[ -e $sysroot ]] || return 1
   cat $installbase/aliases.sh >> $sysroot/root/.bashrc
   cp /root/.vimrc $sysroot/root/.vimrc
 }
 
-rootfs_copy_install() {
-  mkdir -p $sysroot/usr/bin
-  cp /usr/bin/install $sysroot/usr/bin/install
+rootfs_install_packages() {
+  [[ -e $sysroot ]] || return 1
+  local deps
+  deps=(
+    coreutils
+    dracut
+  )
+  dnf_install_rootfs "${deps[@]}"
 }
 
 run_postinstall() {
   mkdir -p $sysroot/root
   cp $installbase/postinstall $sysroot/root/postinstall
+  mount -t proc /proc $sysroot/proc/
+  mount -t sysfs /sys $sysroot/sys/
   #todo
   #chroot $sysroot /root/postinstall
 }
@@ -204,7 +221,7 @@ do_everything() {
   rootfs_configure_fstab || return $?
   rootfs_copy_kernel_install_conf || return $?
   rootfs_copy_root_config || return $?
-  rootfs_copy_install || return $?
+  rootfs_install_packages || return $?
   mount_efisys || return $?
   install_sdboot || return $?
   run_postinstall
