@@ -36,6 +36,10 @@ dnf_install_rootfs() {
   dnf4 -qy install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
+dnf_group_install_rootfs() {
+  dnf4 -qy group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+}
+
 dnf_install() {
   dnf4 -qy install --nogpgcheck --releasever=$(os_release) "$@"
 }
@@ -162,11 +166,12 @@ rootfs_copy_root_config() {
 
 rootfs_install_packages() {
   [[ -e $sysroot ]] || return 1
+  local kernel_version=$(uname -r)
   local deps
   deps=(
-    coreutils
-    dracut
+    kernel-modules-core-$kernel_version
   )
+  dnf_group_install_rootfs core
   dnf_install_rootfs "${deps[@]}"
 }
 
@@ -177,26 +182,6 @@ run_postinstall() {
   mount -t sysfs /sys $sysroot/sys/
   #todo
   #chroot $sysroot /root/postinstall
-}
-
-install_rootfs() {
-  [[ -e $sysroot ]] || return 1
-  rsync \
-     -pogAXtlHrDx \
-     --info=progress2 \
-     --no-inc-recursive \
-     --exclude /dev/ \
-     --exclude /proc/ \
-     --exclude "/tmp/*" \
-     --exclude /sys/ \
-     --exclude /run/ \
-     --exclude "/boot/*rescue*" \
-     --exclude /boot/loader/ \
-     --exclude /boot/efi/ \
-     --exclude /etc/machine-id \
-     --exclude /etc/machine-info \
-     /run/rootfsbase/ \
-     $sysroot
 }
 
 install_tools() {
@@ -214,14 +199,13 @@ do_everything() {
   install_tools || return $?
   create_partitions || return $?
   mount_rootfs || return $?
-  install_rootfs || return $?
+  rootfs_install_packages || return $?
   rootfs_configure_hostname || return $?
   rootfs_configure_machine_id || return $?
   rootfs_configure_cmdline || return $?
   rootfs_configure_fstab || return $?
   rootfs_copy_kernel_install_conf || return $?
   rootfs_copy_root_config || return $?
-  rootfs_install_packages || return $?
   mount_efisys || return $?
   install_sdboot || return $?
   run_postinstall
