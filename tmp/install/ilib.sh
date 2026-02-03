@@ -196,13 +196,12 @@ install_tools() {
   local deps
   deps=(
     systemd-boot-unsigned
-    vim-enhanced
   )
   dnf_setup
   dnf_install ${deps[@]}
 }
 
-# WARNING! This clears the partitions table.
+# WARNING! This clears the partition table.
 do_everything() {
   install_tools || return $?
   create_partitions || return $?
@@ -216,7 +215,8 @@ do_everything() {
   rootfs_copy_root_config || return $?
   mount_efisys || return $?
   install_sdboot || return $?
-  run_postinstall
+  run_postinstall || return $?
+  reboot
 }
 
 try_again() {
