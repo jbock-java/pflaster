@@ -36,6 +36,10 @@ dnf_install_rootfs() {
   dnf4 -qy install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
+dnf_remove_rootfs() {
+  dnf4 -qy remove --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+}
+
 dnf_group_install_rootfs() {
   dnf4 -qy group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
@@ -170,9 +174,14 @@ rootfs_install_packages() {
   local deps
   deps=(
     kernel-modules-core-$kernel_version
+    vim-enhanced
+    vim-default-editor
+    systemd-udev
   )
   dnf_group_install_rootfs core
+  dnf_remove_rootfs nano-default-editor
   dnf_install_rootfs "${deps[@]}"
+  :
 }
 
 run_postinstall() {
@@ -180,8 +189,7 @@ run_postinstall() {
   cp $installbase/postinstall $sysroot/root/postinstall
   mount -t proc /proc $sysroot/proc/
   mount -t sysfs /sys $sysroot/sys/
-  #todo
-  #chroot $sysroot /root/postinstall
+  chroot $sysroot /root/postinstall
 }
 
 install_tools() {

