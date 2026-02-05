@@ -13,19 +13,39 @@ get_uuid() {
   lsblk -n --filter "LABEL == '$1'" -o UUID
 }
 
-configure_repos() {
-  sed -i "s|^enabled=.*|enabled=0|" /etc/yum.repos.d/*.repo
-  sed -i -E \
-    -e 's/^(\[.*\])$/\1\nsslverify=0/' \
-    -e "s|^countme=.*|countme=0|" \
-    -e "s|^enabled=.*|enabled=1|" \
-    /etc/yum.repos.d/fedora.repo
+dnf_configure_repos() {
+  mkdir -p $sysroot/etc/yum.repos.d
+  for repo in /etc/yum.repos.d/*.repo; do
+    if [[ $repo =~ .*/fedora\.repo ]]; then
+      sed -i -E \
+        -e 's/^(\[.*\])$/\1\nsslverify=0/' \
+        -e "s|^countme=.*|countme=0|" \
+        -e "s|^enabled=.*|enabled=1|" \
+        $repo
+    elif [[ $repo =~ .*/fedora-updates\.repo ]]; then
+      sed -i -E \
+        -e 's/^(\[.*\])$/\1\nsslverify=0/' \
+        -e "s|^countme=.*|countme=0|" \
+        -e "s|^enabled=.*|enabled=1|" \
+        $repo
+    else
+      sed -i -E "s|^enabled=.*|enabled=0|" $repo
+    fi
+    cp $repo $sysroot/$repo
+  done
+}
+
+mount_other_things() {
+  mount -B -m /proc $sysroot/proc || return $?
+  mount -B -m /sys $sysroot/sys || return $?
+  mount -B -m /sys/firmware/efi/efivars $sysroot/sys/firmware/efi/efivars || return $?
+  mount -B -m /dev $sysroot/dev
 }
 
 dnf_setup() {
   [[ -e /etc/yum.repos.d ]] && return 0
-  ln -f -s -T /etc/anaconda.repos.d /etc/yum.repos.d
-  configure_repos
+  ln -s /etc/anaconda.repos.d /etc/yum.repos.d
+  dnf_configure_repos
 }
 
 os_release() {
@@ -33,19 +53,15 @@ os_release() {
 }
 
 dnf_install_rootfs() {
-  dnf4 -qy install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+  dnf4 -y install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
 dnf_remove_rootfs() {
-  dnf4 -qy remove --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+  dnf4 -y remove --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
 dnf_group_install_rootfs() {
-  dnf4 -qy group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
-}
-
-dnf_install() {
-  dnf4 -qy install --nogpgcheck --releasever=$(os_release) "$@"
+  dnf4 -y group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
 get_disks() {
@@ -53,10 +69,7 @@ get_disks() {
 }
 
 get_disk() {
-  if [[ -f $installbase/disk ]]; then
-    cat $installbase/disk
-    return 0
-  fi
+  [[ -f $installbase/disk ]] && return 0
   local disks REPLY
   disks=$(get_disks)
   disks=${disks% }
@@ -99,31 +112,18 @@ create_partitions() {
 
 mount_rootfs() {
   [[ -e $sysroot ]] && return 0
-  mkdir -p $sysroot
   local device
   device=$(blkid --label linuxroot)
-  mount $device $sysroot
+  mount -m $device $sysroot
 }
 
 mount_efisys() {
-  mkdir -p $sysroot/boot/efi
   get_disk
   disk=$(< $installbase/disk)
-  local efisys
-  efisys=$(blkid --label EFISYS)
-  [[ $efisys ]] || return 1
-  mkdir -p $sysroot/boot/efi
-  mount $efisys $sysroot/boot/efi
-}
-
-install_sdboot() {
-  [[ -e $sysroot/boot/efi ]] || return 1
-  local bootnum bootnums
-  bootnums=$(efibootmgr | sed -n -E 's/^Boot([0-9]+).*\bLinux Boot Manager\b.*$/\1/p')
-  for bootnum in $bootnums; do
-    efibootmgr --bootnum $bootnum --delete-bootnum
-  done
-  bootctl install --esp-path=$sysroot/boot/efi
+  local device
+  device=$(blkid --label EFISYS)
+  [[ $device ]] || return 1
+  mount -m $device $sysroot/boot/efi
 }
 
 rootfs_configure_hostname() {
@@ -168,44 +168,60 @@ rootfs_copy_root_config() {
   cp /root/.vimrc $sysroot/root/.vimrc
 }
 
+run_chrooted_post_sdboot() {
+  local bootnum bootnums
+  bootnums=$(efibootmgr | sed -n -E 's/^Boot([0-9]+).*\bLinux Boot Manager\b.*$/\1/p')
+  for bootnum in $bootnums; do
+    efibootmgr --bootnum $bootnum --delete-bootnum || return $?
+  done
+  mkdir -p $sysroot/root
+  cp $installbase/post_sdboot $sysroot/root/post_sdboot
+  chroot $sysroot /root/post_sdboot
+}
+
 rootfs_install_packages() {
+  [[ -e $sysroot ]] || return 1
+  local deps
+  deps=(
+    vim-enhanced
+    vim-default-editor
+    systemd-boot-unsigned
+    efibootmgr
+    selinux-policy
+  )
+  dnf_group_install_rootfs core || return $?
+  dnf_remove_rootfs nano-default-editor || return $?
+  dnf_install_rootfs "${deps[@]}"
+}
+
+rootfs_install_kernel() {
   [[ -e $sysroot ]] || return 1
   local kernel_version=$(uname -r)
   local deps
   deps=(
     kernel-modules-core-$kernel_version
-    vim-enhanced
-    vim-default-editor
-    systemd-udev
+    kernel-core-$kernel_version
   )
-  dnf_group_install_rootfs core
-  dnf_remove_rootfs nano-default-editor
   dnf_install_rootfs "${deps[@]}"
-  :
 }
 
-run_postinstall() {
+run_chrooted_postinstall() {
   mkdir -p $sysroot/root
   cp $installbase/postinstall $sysroot/root/postinstall
-  mount -t proc /proc $sysroot/proc/
-  mount -t sysfs /sys $sysroot/sys/
   chroot $sysroot /root/postinstall
 }
 
-install_tools() {
-  local deps
-  deps=(
-    systemd-boot-unsigned
-  )
-  dnf_setup
-  dnf_install ${deps[@]}
+stop() {
+  touch /tmp/stop ; echo "OK"
 }
 
 # WARNING! This clears the partition table.
 do_everything() {
-  install_tools || return $?
   create_partitions || return $?
   mount_rootfs || return $?
+  mount_efisys || return $?
+  mount_other_things || return $?
+  dnf_setup || return $?
   rootfs_install_packages || return $?
   rootfs_configure_hostname || return $?
   rootfs_configure_machine_id || return $?
@@ -213,9 +229,10 @@ do_everything() {
   rootfs_configure_fstab || return $?
   rootfs_copy_kernel_install_conf || return $?
   rootfs_copy_root_config || return $?
-  mount_efisys || return $?
-  install_sdboot || return $?
-  run_postinstall || return $?
+  run_chrooted_post_sdboot || return $?
+  rootfs_install_kernel || return $?
+  run_chrooted_postinstall || return $?
+  while [[ -f /tmp/stop ]]; do sleep 2; done
   reboot
 }
 

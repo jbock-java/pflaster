@@ -1,0 +1,10 @@
+#!/bin/bash
+
+install_sdboot() {
+  [[ -e /boot/efi ]] || return 1
+  bootctl install --esp-path=/boot/efi
+}
+
+return 2> /dev/null || {
+  install_sdboot
+}

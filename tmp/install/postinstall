@@ -1,18 +1,30 @@
 #!/bin/bash
 
+append_bootloader() {
+  local conf
+  local token="$1"
+  for conf in /boot/efi/loader/entries/*x86_64.conf; do
+    sed -i "/^options\b/ s#\$# $token#" $conf
+  done
+}
+
 do_postinstall() {
-  kernel-install add -v || return 1
   useradd -m -g wheel -p '$y$j9T$el9zAYHYnL4Oq7jQ9eeYx/$wK0wzF89ZEiy5/WBN1LEnEdeDExDlHofqT/BUzjriS2' core
   mkdir -p /home/core/.ssh
   chmod 700 /home/core/.ssh
   echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCmvZwz5BggofSvRQpl9m/hgJCC/PjStggrInuhtiUa927Ir/IHai3hJwtEBViRhl3MOw0jJGPi/s2SJl9Pf7UUOZIoEwxZOT31WFdCMXZNYxwZCAsWzCnYAbQ+3BnUnqLHtlf5yfpaq2YClmJet4ow46Ljfook361C2cfKE1DHcaXM6PJqwPFzv4O+5B1jJtdsyQZ8j5XpaP/h3xAHRsl9mMr8qqJptWUbX1hg16/PLCeyhw6azfuO+Br4ZqUO1UVHlD6MON1cCg6BNz2P7M/QrXo2dHlTtVWVqs35m6Tu8sjhnjBQzUlVSS243O5MPxUz96i7mKIXQRi+7SRiU3xIXoaUMhuMEW50RA0kad+xU2yUYg5G7eU9EI2mZ3A5KKRJCpcvs8XC3+FChBHyDMmtlbzM/Ja97mOtYOl5iBJr0JQa13Pvlrm0JUU4IOjDdXvfquitKo8OZXn/HWkEhwxm2Tw3QHESblmVk1DFVT3WCrJk3xQK1kQX8ncSe4Yc8B8=" > /home/core/.ssh/authorized_keys
   chmod 600 /home/core/.ssh/authorized_keys
-  chown -R core: /home/core/.ssh
+  mkdir -p /home/core/.bashrc.d
+  echo "alias ll='ls -lAZ --color=auto'" > /home/core/.bashrc.d/aliases.sh
+  chown -R core: /home/core
   chmod 640 /etc/sudoers
   sed -i -E 's/^%wheel\b.*/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
   chmod 440 /etc/sudoers
+  echo "timeout 5" >> /boot/efi/loader/loader.conf
+  append_bootloader "panic=60"
+  touch /.autorelabel
 }
 
-return || {
+return 2> /dev/null || {
   do_postinstall
 }
