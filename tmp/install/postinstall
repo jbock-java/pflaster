@@ -22,7 +22,6 @@ do_postinstall() {
   chmod 440 /etc/sudoers
   echo "timeout 5" >> /boot/efi/loader/loader.conf
   append_bootloader "panic=60"
-  touch /.autorelabel
 }
 
 return 2> /dev/null || {

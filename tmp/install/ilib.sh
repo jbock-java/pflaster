@@ -123,7 +123,7 @@ mount_efisys() {
   local device
   device=$(blkid --label EFISYS)
   [[ $device ]] || return 1
-  mount -m $device $sysroot/boot/efi
+  mount --mkdir=0700 -o X-mount.mode=0700 $device $sysroot/boot/efi
 }
 
 rootfs_configure_hostname() {
