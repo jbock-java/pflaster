@@ -1,6 +1,11 @@
 installbase=/tmp/install
 sysroot=/mnt/sysroot
 
+error() {
+  1>&2 echo "ERROR: $@"
+  echo 1
+}
+
 by_partlabel() {
   blkid -o device -t PARTLABEL=$1
 }
@@ -85,6 +90,7 @@ get_disk() {
 print_parted_commands() {
   local rootsize=16384
   local homesize=4096
+  local cryptsize=4096
   local efisize=2048
   local pos=1
   echo "mklabel gpt"
@@ -95,11 +101,13 @@ print_parted_commands() {
   (( pos += rootsize ))
   echo "mkpart linuxhome ext4 ${pos}MiB $(( pos + homesize ))MiB"
   (( pos += homesize ))
+  echo "mkpart linuxcrypt ext4 ${pos}MiB $(( pos + cryptsize ))MiB"
+  (( pos += cryptsize ))
 }
 
 # WARNING! This clears the partitions table.
 create_partitions() {
-  local disk part disk_path
+  local disk part disk_path uuid_linuxcrypt
   get_disk
   disk=$(< $installbase/disk)
   disk_path=$(get_path $disk)
@@ -107,7 +115,14 @@ create_partitions() {
   parted --script $disk_path -- $(print_parted_commands) || return $?
   mkfs.vfat -n EFISYS -F 32 $(by_partlabel EFISYS) || return $?
   mkfs.ext4 -q -L linuxroot $(by_partlabel linuxroot) <<< y || return $?
-  mkfs.ext4 -q -L linuxhome $(by_partlabel linuxhome) <<< y
+  mkfs.ext4 -q -L linuxhome $(by_partlabel linuxhome) <<< y || return $?
+  echo -n temppass > /tmp/temppass
+  chmod 600 /tmp/temppass
+  cryptsetup luksFormat --batch-mode $(by_partlabel linuxcrypt) /tmp/temppass || return $(error "luksFormat")
+  uuid_linuxcrypt=$(lsblk -n --filter "PATH == '$(by_partlabel linuxcrypt)'" -o UUID) || return $(error "uuid_linuxcrypt")
+  cryptsetup luksOpen --batch-mode --key-file=/tmp/temppass $(by_partlabel linuxcrypt) luks-$uuid_linuxcrypt || return $(error "luksOpen")
+  mkfs.ext4 -q -L linuxcrypt $(by_partlabel linuxcrypt) <<< y || return $(error "ext4 linuxcrypt")
+  sleep inf
 }
 
 mount_rootfs() {
