@@ -118,12 +118,10 @@ mount_rootfs() {
 }
 
 mount_efisys() {
-  get_disk
-  disk=$(< $installbase/disk)
+  [[ -e $sysroot/boot/efi ]] && return 0
   local device
   device=$(blkid --label EFISYS)
-  [[ $device ]] || return 1
-  mount --mkdir=0700 -o X-mount.mode=0700 $device $sysroot/boot/efi
+  mount --mkdir=0700 -o fmask=0077 -o dmask=0077 -o shortname=winnt $device $sysroot/boot/efi
 }
 
 rootfs_configure_hostname() {
