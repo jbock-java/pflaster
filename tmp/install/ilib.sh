@@ -58,7 +58,7 @@ dnf_group_install_rootfs() {
 mount_rootfs() {
   [[ -e $sysroot ]] && return 0
   local device
-  device=$(blkid --label linuxroot)
+  device=$(blkid --label luks-root)
   mount -m $device $sysroot
 }
 
@@ -85,12 +85,13 @@ rootfs_configure_machine_id() {
 rootfs_configure_cmdline() {
   [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc/kernel
-  echo "root=UUID=$(get_uuid linuxroot) ro" > $sysroot/etc/kernel/cmdline
+  echo "root=UUID=$(get_uuid luks-root)" > $sysroot/etc/kernel/cmdline
 }
 
 print_fstab() {
-  echo "UUID=$(get_uuid linuxroot) /         ext4 x-systemd.device-timeout=0 0 0"
-  echo "UUID=$(get_uuid EFISYS   ) /boot/efi vfat umask=0077,shortname=winnt 0 2"
+  echo "UUID=$(get_uuid EFISYS)    /boot/efi vfat umask=0077,shortname=winnt 0 2"
+  echo "UUID=$(get_uuid luks-root) /         ext4 x-systemd.device-timeout=0 0 0"
+  echo "UUID=$(get_uuid luks-home) /home     ext4 x-systemd.device-timeout=0 0 0"
 }
 
 rootfs_configure_fstab() {

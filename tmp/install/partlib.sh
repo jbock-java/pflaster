@@ -1,5 +1,12 @@
 [[ -v installbase ]] || source /tmp/install/common.sh
 
+get_disksize() {
+  local disk bytes
+  disk=$(get_disk) || return $(error "get_disk")
+  bytes=$(lsblk -b -n --filter "PATH == '$disk'" -o SIZE)
+  echo $(( bytes / ( 1024 * 1024 ) ))
+}
+
 get_only_child() {
   [[ $1 ]] || return $(error "param: PATH")
   local kname children
@@ -11,42 +18,36 @@ get_only_child() {
 }
 
 print_parted_commands() {
-  local rootsize=8192
-  local homesize=4096
-  local cryptsize=4096
-  local efisize=2048
-  local pos=1
+  local disksize
+  disksize=$(get_disksize)
+  local efisize=2044
+  local pvrootsize=$(( disksize - efisize - 32 ))
+  local pos=4
   echo "mklabel gpt"
   echo "mkpart EFISYS fat32 ${pos}MiB $(( pos + efisize ))MiB"
   (( pos += efisize ))
   echo "set 1 esp on"
-  echo "mkpart linuxroot ext4 ${pos}MiB $(( pos + rootsize ))MiB"
-  (( pos += rootsize ))
-  echo "mkpart linuxhome ext4 ${pos}MiB $(( pos + homesize ))MiB"
-  (( pos += homesize ))
-  echo "mkpart pvroot ext4 ${pos}MiB $(( pos + cryptsize ))MiB"
-  (( pos += cryptsize ))
+  echo "mkpart pvroot ext4 ${pos}MiB $(( pos + pvrootsize ))MiB"
+  (( pos += pvrootsize ))
 }
 
 # WARNING! This clears the partition table.
 create_partitions() {
   local disk part pvroot luksroot
   disk=$(get_disk) || return $(error "get_disk")
-  parted --script $disk -- $(print_parted_commands) || return $(error "parted")
+  parted --script --align optimal $disk -- $(print_parted_commands) || return $(error "parted")
   mkfs.vfat -n EFISYS -F 32 $(by_partlabel EFISYS) || return $(error "mkfs efisys")
-  mkfs.ext4 -q -L linuxroot $(by_partlabel linuxroot) <<< y || return $(error "mkfs linuxroot")
-  mkfs.ext4 -q -L linuxhome $(by_partlabel linuxhome) <<< y || return $(error "mkfs linuxhome")
   echo -n temppass > /tmp/temppass
   chmod 600 /tmp/temppass
   pvroot=$(by_partlabel pvroot)
   cryptsetup luksFormat --batch-mode $pvroot /tmp/temppass || return $(error "luksFormat")
-  cryptsetup luksOpen --batch-mode --key-file=/tmp/temppass $pvroot lr || return $(error "luksOpen")
+  cryptsetup luksOpen --batch-mode --key-file=/tmp/temppass $pvroot luks || return $(error "luksOpen")
   cryptsetup config $pvroot --label pvroot || return $(error "cryptsetup config")
   luksroot=$(get_only_child $pvroot) || return $(error "get_only_child")
   pvcreate $luksroot || return $(error "pvcreate")
-  vgcreate lr $luksroot || return $(error "vgcreate")
-  lvcreate -L 500M -n opt lr || return $(error "lvcreate opt")
-  mkfs.ext4 -q -L lr-opt /dev/mapper/lr-opt <<< y || return $(error "ext4 opt")
-  echo "create_partitions: going to sleep"
-  sleep inf
+  vgcreate luks $luksroot || return $(error "vgcreate")
+  lvcreate -L 8192M -n root luks || return $(error "lvcreate root")
+  lvcreate -L 2048M -n home luks || return $(error "lvcreate home")
+  mkfs.ext4 -q -L luks-root /dev/mapper/luks-root <<< y || return $(error "ext4 root")
+  mkfs.ext4 -q -L luks-home /dev/mapper/luks-home <<< y || return $(error "ext4 home")
 }
