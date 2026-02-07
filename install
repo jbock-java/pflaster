@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+# This script is intended for testing.
+
+[[ $EUID = "0" ]] || { echo "need root" ; exit 1 ; }
+
+[[ -d /tmp/install ]] && rm /tmp/install/*
+mkdir -p /tmp/install
+cp tmp/install/* /tmp/install

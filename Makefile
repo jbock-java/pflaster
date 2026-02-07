@@ -1,2 +1,2 @@
 pack:
-	tar --exclude="*.swp" -czf root.tgz root tmp
+	tar --exclude="*.swp" -czf root.tgz root tmp bin

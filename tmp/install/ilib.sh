@@ -1,22 +1,8 @@
-installbase=/tmp/install
+[[ -v installbase ]] || source /tmp/install/common.sh
+
+source $installbase/partlib.sh
+
 sysroot=/mnt/sysroot
-
-error() {
-  1>&2 echo "ERROR: $@"
-  echo 1
-}
-
-by_partlabel() {
-  blkid -o device -t PARTLABEL=$1
-}
-
-get_path() {
-  lsblk -n --filter "KNAME=='$1'" -o PATH
-}
-
-get_uuid() {
-  lsblk -n --filter "LABEL == '$1'" -o UUID
-}
 
 dnf_configure_repos() {
   mkdir -p $sysroot/etc/yum.repos.d
@@ -67,62 +53,6 @@ dnf_remove_rootfs() {
 
 dnf_group_install_rootfs() {
   dnf4 -y group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
-}
-
-get_disks() {
-  lsblk -n --filter "TYPE=='disk' && RM==0 && MOUNTPOINT!='[SWAP]'" -o KNAME | tr '\n' ' '
-}
-
-get_disk() {
-  [[ -f $installbase/disk ]] && return 0
-  local disks REPLY
-  disks=$(get_disks)
-  disks=${disks% }
-  if [[ ${disks/ /} = "$disks" ]]; then
-    echo $disks > $installbase/disk
-  else
-    lsblk
-    read -r -p "Please choose disk for installation [${disks// /|}]: "
-    echo $REPLY > $installbase/disk
-  fi
-}
-
-print_parted_commands() {
-  local rootsize=16384
-  local homesize=4096
-  local cryptsize=4096
-  local efisize=2048
-  local pos=1
-  echo "mklabel gpt"
-  echo "mkpart EFISYS fat32 ${pos}MiB $(( pos + efisize ))MiB"
-  (( pos += efisize ))
-  echo "set 1 esp on"
-  echo "mkpart linuxroot ext4 ${pos}MiB $(( pos + rootsize ))MiB"
-  (( pos += rootsize ))
-  echo "mkpart linuxhome ext4 ${pos}MiB $(( pos + homesize ))MiB"
-  (( pos += homesize ))
-  echo "mkpart linuxcrypt ext4 ${pos}MiB $(( pos + cryptsize ))MiB"
-  (( pos += cryptsize ))
-}
-
-# WARNING! This clears the partitions table.
-create_partitions() {
-  local disk part disk_path uuid_linuxcrypt
-  get_disk
-  disk=$(< $installbase/disk)
-  disk_path=$(get_path $disk)
-  [[ $disk_path ]] || return 1
-  parted --script $disk_path -- $(print_parted_commands) || return $?
-  mkfs.vfat -n EFISYS -F 32 $(by_partlabel EFISYS) || return $?
-  mkfs.ext4 -q -L linuxroot $(by_partlabel linuxroot) <<< y || return $?
-  mkfs.ext4 -q -L linuxhome $(by_partlabel linuxhome) <<< y || return $?
-  echo -n temppass > /tmp/temppass
-  chmod 600 /tmp/temppass
-  cryptsetup luksFormat --batch-mode $(by_partlabel linuxcrypt) /tmp/temppass || return $(error "luksFormat")
-  uuid_linuxcrypt=$(lsblk -n --filter "PATH == '$(by_partlabel linuxcrypt)'" -o UUID) || return $(error "uuid_linuxcrypt")
-  cryptsetup luksOpen --batch-mode --key-file=/tmp/temppass $(by_partlabel linuxcrypt) luks-$uuid_linuxcrypt || return $(error "luksOpen")
-  mkfs.ext4 -q -L linuxcrypt $(by_partlabel linuxcrypt) <<< y || return $(error "ext4 linuxcrypt")
-  sleep inf
 }
 
 mount_rootfs() {
@@ -224,28 +154,25 @@ run_chrooted_postinstall() {
   chroot $sysroot /root/postinstall
 }
 
-stop() {
-  touch /tmp/stop ; echo "OK"
-}
-
 # WARNING! This clears the partition table.
 do_everything() {
-  create_partitions || return $?
-  mount_rootfs || return $?
-  mount_efisys || return $?
-  mount_other_things || return $?
-  dnf_setup || return $?
-  rootfs_install_packages || return $?
-  rootfs_configure_hostname || return $?
-  rootfs_configure_machine_id || return $?
-  rootfs_configure_cmdline || return $?
-  rootfs_configure_fstab || return $?
-  rootfs_copy_kernel_install_conf || return $?
-  rootfs_copy_root_config || return $?
-  run_chrooted_post_sdboot || return $?
-  rootfs_install_kernel || return $?
-  run_chrooted_postinstall || return $?
-  while [[ -f /tmp/stop ]]; do sleep 2; done
+  configure_disk || return $(error "configure_disk")
+  create_partitions || return $(error "create partitions")
+  mount_rootfs || return $(error "mount_rootfs")
+  mount_efisys || return $(error "mount_efisys")
+  mount_other_things || return $(error "mount_other_things")
+  dnf_setup || return $(error "dnf_setup")
+  rootfs_install_packages || return $(error "rootfs_install_packages")
+  rootfs_configure_hostname || return $(error "rootfs_configure_hostname")
+  rootfs_configure_machine_id || return $(error "rootfs_configure_machine_id")
+  rootfs_configure_cmdline || return $(error "rootfs_configure_cmdline")
+  rootfs_configure_fstab || return $(error "rootfs_configure_fstab")
+  rootfs_copy_kernel_install_conf || return $(error "rootfs_copy_kernel_install_conf")
+  rootfs_copy_root_config || return $(error "rootfs_copy_root_config")
+  run_chrooted_post_sdboot || return $(error "run_chrooted_post_sdboot")
+  rootfs_install_kernel || return $(error "rootfs_install_kernel")
+  run_chrooted_postinstall || return $(error "run_chrooted_postinstall")
+  [[ -f /tmp/stop ]] && { echo "zZz..."; sleep inf ; }
   reboot
 }
 
