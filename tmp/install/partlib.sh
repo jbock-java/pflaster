@@ -36,14 +36,14 @@ create_partitions() {
   local disk part pvroot luksroot
   disk=$(get_disk) || return $(error "get_disk")
   parted --script --align optimal $disk -- $(print_parted_commands) || return $(error "parted")
-  mkfs.vfat -n EFISYS -F 32 $(by_partlabel EFISYS) || return $(error "mkfs efisys")
+  mkfs.vfat -n EFISYS -F 32 $(by_partlabel EFISYS) || return $(error "mkfs vfat")
   echo -n temppass > /tmp/temppass
   chmod 600 /tmp/temppass
   pvroot=$(by_partlabel pvroot)
   cryptsetup luksFormat --batch-mode $pvroot /tmp/temppass || return $(error "luksFormat")
   cryptsetup luksOpen --batch-mode --key-file=/tmp/temppass $pvroot luks || return $(error "luksOpen")
   cryptsetup config $pvroot --label pvroot || return $(error "cryptsetup config")
-  luksroot=$(get_only_child $pvroot) || return $(error "get_only_child")
+  luksroot=$(get_only_child $pvroot) || return $(error "find luksroot")
   pvcreate $luksroot || return $(error "pvcreate")
   vgcreate luks $luksroot || return $(error "vgcreate")
   lvcreate -L 8192M -n root luks || return $(error "lvcreate root")

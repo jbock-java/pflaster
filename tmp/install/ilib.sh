@@ -72,7 +72,7 @@ mount_efisys() {
 rootfs_configure_hostname() {
   [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc
-  # todo: take hostname from cmdline, or ask the user
+  # todo: make this configurable
   echo "box" > $sysroot/etc/hostname
 }
 
@@ -82,16 +82,31 @@ rootfs_configure_machine_id() {
   head -c 16 /dev/urandom | od -A n -t x1 | sed 's/ //g' > $sysroot/etc/machine-id
 }
 
+print_cmdline_options() {
+  echo "root=UUID=$(get_uuid luks-root)"
+  echo "rd.luks.uuid=$(get_uuid pvroot)"
+  echo "rd.lvm.vg=luks"
+  echo "rd.shell"
+}
+
 rootfs_configure_cmdline() {
   [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc/kernel
-  echo "root=UUID=$(get_uuid luks-root)" > $sysroot/etc/kernel/cmdline
+  print_cmdline_options | tr '\n' ' ' > $sysroot/etc/kernel/cmdline
+  echo >> $sysroot/etc/kernel/cmdline
+}
+
+rootfs_configure_luks() {
+  [[ -e $sysroot ]] || return 1
+  mkdir -p $sysroot/etc/dracut.conf.d
+  echo "luks UUID=$(get_uuid pvroot) none discard,tpm2-device=auto" > $sysroot/etc/crypttab
+  echo 'add_dracutmodules+=" tpm2-tss debug "' > $sysroot/etc/dracut.conf.d/tpm2.conf
 }
 
 print_fstab() {
   echo "UUID=$(get_uuid EFISYS)    /boot/efi vfat umask=0077,shortname=winnt 0 2"
-  echo "UUID=$(get_uuid luks-root) /         ext4 x-systemd.device-timeout=0 0 0"
-  echo "UUID=$(get_uuid luks-home) /home     ext4 x-systemd.device-timeout=0 0 0"
+  echo "UUID=$(get_uuid luks-root) /         ext4 defaults 1 2"
+  echo "UUID=$(get_uuid luks-home) /home     ext4 defaults 1 2"
 }
 
 rootfs_configure_fstab() {
@@ -109,7 +124,8 @@ rootfs_copy_kernel_install_conf() {
 rootfs_copy_root_config() {
   [[ -e $sysroot ]] || return 1
   cat $installbase/aliases.sh >> $sysroot/root/.bashrc
-  cp /root/.vimrc $sysroot/root/.vimrc
+  cp /root/.vimrc $sysroot/root
+  cp /root/.bash_profile $sysroot/root
 }
 
 run_chrooted_post_sdboot() {
@@ -167,6 +183,7 @@ do_everything() {
   rootfs_configure_hostname || return $(error "rootfs_configure_hostname")
   rootfs_configure_machine_id || return $(error "rootfs_configure_machine_id")
   rootfs_configure_cmdline || return $(error "rootfs_configure_cmdline")
+  rootfs_configure_luks || return $(error "rootfs_configure_luks")
   rootfs_configure_fstab || return $(error "rootfs_configure_fstab")
   rootfs_copy_kernel_install_conf || return $(error "rootfs_copy_kernel_install_conf")
   rootfs_copy_root_config || return $(error "rootfs_copy_root_config")

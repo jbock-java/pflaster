@@ -1,14 +1,7 @@
 #!/bin/bash
 
-append_bootloader() {
-  local conf
-  local token="$1"
-  for conf in /boot/efi/loader/entries/*x86_64.conf; do
-    sed -i "/^options\b/ s#\$# $token#" $conf
-  done
-}
-
 do_postinstall() {
+  # todo: make this configurable
   useradd -m -g wheel -p '$y$j9T$el9zAYHYnL4Oq7jQ9eeYx/$wK0wzF89ZEiy5/WBN1LEnEdeDExDlHofqT/BUzjriS2' core
   mkdir -p /home/core/.ssh
   chmod 700 /home/core/.ssh
@@ -21,7 +14,6 @@ do_postinstall() {
   sed -i -E 's/^%wheel\b.*/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
   chmod 440 /etc/sudoers
   echo "timeout 5" >> /boot/efi/loader/loader.conf
-  append_bootloader "panic=60"
 }
 
 return 2> /dev/null || {
