@@ -175,11 +175,3 @@ do_everything() {
   [[ -f /tmp/stop ]] && { echo "zZz..."; sleep inf ; }
   reboot
 }
-
-try_again() {
-  local next
-  next=$(efibootmgr | sed -n -E 's/^BootCurrent:\s*(\S+)$/\1/p')
-  [[ $next ]] && efibootmgr -n $next
-  touch /tmp/fail
-  tmux select-window -t1
-}

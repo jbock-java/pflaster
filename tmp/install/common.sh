@@ -28,20 +28,20 @@ configure_disk() {
   disks=$(get_disks)
   disks=${disks% }
   while true; do
-    if [[ -z $disks ]]; then
+    if [[ -z ${disks// /} ]]; then
       echo "FATAL: no disks"
       return 1
-    elif [[ ${disks/ /} = "$disks" ]]; then
+    elif [[ ${disks// /} = "$disks" ]]; then
       get_path $disks > $installbase/disk
+      return 0
     else
       $lsblk_printed || { lsblk ; lsblk_printed=true ; }
       read -r -p "Please choose disk for installation [${disks// /|}]: "
       path=$(get_path $REPLY) || continue
       echo $path > $installbase/disk
-      break
+      return 0
     fi
   done
-  return 0
 }
 
 get_disk() {

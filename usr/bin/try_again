@@ -1,0 +1,6 @@
+#!/bin/bash
+
+next=$(efibootmgr | sed -n -E 's/^BootCurrent:\s*(\S+)$/\1/p')
+[[ $next ]] && efibootmgr -n $next
+touch /tmp/fail
+tmux select-window -t1

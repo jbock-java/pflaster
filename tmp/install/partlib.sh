@@ -1,14 +1,17 @@
 [[ -v installbase ]] || source /tmp/install/common.sh
 
-get_children() {
+get_only_child() {
   [[ $1 ]] || return $(error "param: PATH")
-  local kname
+  local kname children
   kname=$(lsblk -n --filter "PATH == '$1'" -o KNAME)
-  lsblk -n --filter "PKNAME == '$kname'" -o PATH
+  children=$(lsblk -n --filter "PKNAME == '$kname'" -o PATH | tr '\n' ' ')
+  children=${children% }
+  [[ $children = "${children// /}" ]] || return $(error "more than one child")
+  echo $children
 }
 
 print_parted_commands() {
-  local rootsize=16384
+  local rootsize=8192
   local homesize=4096
   local cryptsize=4096
   local efisize=2048
@@ -27,25 +30,22 @@ print_parted_commands() {
 
 # WARNING! This clears the partition table.
 create_partitions() {
-  local disk part disk_path uuid_linuxcrypt
+  local disk part linuxcrypt luksroot
   disk=$(get_disk) || return $(error "get_disk")
-  disk_path=$(get_path $disk)
-  [[ $disk_path ]] || return 1
-  parted --script $disk_path -- $(print_parted_commands) || return $?
-  mkfs.vfat -n EFISYS -F 32 $(by_partlabel EFISYS) || return $?
-  mkfs.ext4 -q -L linuxroot $(by_partlabel linuxroot) <<< y || return $?
-  mkfs.ext4 -q -L linuxhome $(by_partlabel linuxhome) <<< y || return $?
+  parted --script $disk -- $(print_parted_commands) || return $(error "parted")
+  mkfs.vfat -n EFISYS -F 32 $(by_partlabel EFISYS) || return $(error "mkfs efisys")
+  mkfs.ext4 -q -L linuxroot $(by_partlabel linuxroot) <<< y || return $(error "mkfs linuxroot")
+  mkfs.ext4 -q -L linuxhome $(by_partlabel linuxhome) <<< y || return $(error "mkfs linuxhome")
   echo -n temppass > /tmp/temppass
   chmod 600 /tmp/temppass
-  cryptsetup luksFormat --batch-mode $(by_partlabel linuxcrypt) /tmp/temppass || return $(error "luksFormat")
-  uuid_linuxcrypt=$(lsblk -n --filter "PATH == '$(by_partlabel linuxcrypt)'" -o UUID) || return $(error "uuid_linuxcrypt")
-  cryptsetup luksOpen --batch-mode --key-file=/tmp/temppass $(by_partlabel linuxcrypt) luks-$uuid_linuxcrypt || return $(error "luksOpen")
-  local pvcrypt linuxopt
-  pvcrypt=$(get_children $(by_partlabel linuxcrypt))
-  pvcreate $pvcrypt || return $(error "pvcreate")
-  vgcreate vgcrypt $pvcrypt || return $(error "vgcreate")
-  lvcreate -L 500M -n linuxopt vgcrypt || return $(error "lvcreate linuxopt")
-  linuxopt=$(get_children $pvcrypt)
-  mkfs.ext4 -q -L linuxopt $linuxopt <<< y || return $(error "ext4 linuxopt")
+  linuxcrypt=$(by_partlabel linuxcrypt)
+  cryptsetup luksFormat --batch-mode $linuxcrypt /tmp/temppass || return $(error "luksFormat")
+  cryptsetup luksOpen --batch-mode --key-file=/tmp/temppass $linuxcrypt lr || return $(error "luksOpen")
+  luksroot=$(get_only_child $linuxcrypt) || return $(error "get_only_child")
+  pvcreate $luksroot || return $(error "pvcreate")
+  vgcreate lr $luksroot || return $(error "vgcreate")
+  lvcreate -L 500M -n opt lr || return $(error "lvcreate opt")
+  mkfs.ext4 -q -L lr-opt /dev/mapper/lr-opt <<< y || return $(error "ext4 opt")
+  echo "create_partitions: going to sleep"
   sleep inf
 }
