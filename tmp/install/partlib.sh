@@ -24,13 +24,13 @@ print_parted_commands() {
   (( pos += rootsize ))
   echo "mkpart linuxhome ext4 ${pos}MiB $(( pos + homesize ))MiB"
   (( pos += homesize ))
-  echo "mkpart linuxcrypt ext4 ${pos}MiB $(( pos + cryptsize ))MiB"
+  echo "mkpart pvroot ext4 ${pos}MiB $(( pos + cryptsize ))MiB"
   (( pos += cryptsize ))
 }
 
 # WARNING! This clears the partition table.
 create_partitions() {
-  local disk part linuxcrypt luksroot
+  local disk part pvroot luksroot
   disk=$(get_disk) || return $(error "get_disk")
   parted --script $disk -- $(print_parted_commands) || return $(error "parted")
   mkfs.vfat -n EFISYS -F 32 $(by_partlabel EFISYS) || return $(error "mkfs efisys")
@@ -38,10 +38,11 @@ create_partitions() {
   mkfs.ext4 -q -L linuxhome $(by_partlabel linuxhome) <<< y || return $(error "mkfs linuxhome")
   echo -n temppass > /tmp/temppass
   chmod 600 /tmp/temppass
-  linuxcrypt=$(by_partlabel linuxcrypt)
-  cryptsetup luksFormat --batch-mode $linuxcrypt /tmp/temppass || return $(error "luksFormat")
-  cryptsetup luksOpen --batch-mode --key-file=/tmp/temppass $linuxcrypt lr || return $(error "luksOpen")
-  luksroot=$(get_only_child $linuxcrypt) || return $(error "get_only_child")
+  pvroot=$(by_partlabel pvroot)
+  cryptsetup luksFormat --batch-mode $pvroot /tmp/temppass || return $(error "luksFormat")
+  cryptsetup luksOpen --batch-mode --key-file=/tmp/temppass $pvroot lr || return $(error "luksOpen")
+  cryptsetup config $pvroot --label pvroot || return $(error "cryptsetup config")
+  luksroot=$(get_only_child $pvroot) || return $(error "get_only_child")
   pvcreate $luksroot || return $(error "pvcreate")
   vgcreate lr $luksroot || return $(error "vgcreate")
   lvcreate -L 500M -n opt lr || return $(error "lvcreate opt")

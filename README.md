@@ -1,10 +1,18 @@
 ### WARNING! This is an EXPERIMENTAL fedora installer.
 
-| :warning: Running this may **erase all data** on your computer. |
-|-----------------------------------------------------------------|
+| :warning: Running this may :rotating_light: **erase all your data** :rotating_light: :ambulance: :ambulance: |
+|--------------------------------------------------------------------------------------------------------------|
 
-| :zap: You should only run this on a VM or a garbage computer. |
-|---------------------------------------------------------------|
+| :zap: You should only run this on a VM or garbage computer! :zap: |
+|-------------------------------------------------------------------|
+
+### Architectural overview
+
+* The goal is to be more flexible about the partitioning. The installed system *should* behave like any other fedora installation.
+* We use the "Everything" fedora spin.
+* Anaconda is used, but only as an entry point. In kickstart terms: the entire installation happens in "%pre".
+* The installer is written in bash.
+* Packages are installed via dnf.
 
 ### How it started
 
@@ -14,17 +22,13 @@ See this thread: <https://discussion.fedoraproject.org/t/how-to-install-fedora-w
 
 Run `make`. This should create `root.tgz`.
 
-Now that you have `root.tgz`, start a http server. Here's an easy way to do this:
+Now that you have `root.tgz`, start a server. Here's an easy way to do this:
 
 ```
 ./serve
 ```
 
-Write down the http address that this command prints out. For example: `http://192.168.178.22:3001/manual.cfg`
-
-### Architectural overview
-
-Our installer comes in the form of a kickstart file, which is executed by anaconda. Anaconda is the installer of the "Everything" fedora spin.
+Write down the http address that is printed, and append "manual.cfg". For example: `http://192.168.178.22:3001/manual.cfg`
 
 ### Instructions for iPXE
 
