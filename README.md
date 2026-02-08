@@ -6,13 +6,26 @@
 | :zap: You should only run this on a VM or garbage computer! :zap: |
 |-------------------------------------------------------------------|
 
+### Goals
+
+1. The installed system *should* behave like any other fedora installation.
+2. [support LUKS devices that are unlocked outside the installer](https://bugzilla.redhat.com/show_bug.cgi?id=2019455)
+3. Unlocking via tpm should work out of the box.
+4. systemd-boot by default
+
 ### Architectural overview
 
-* The goal is to be more flexible about the partitioning. The installed system *should* behave like any other fedora installation.
 * We use the "Everything" fedora spin.
 * Anaconda is used, but only as an entry point. In kickstart terms: the entire installation happens in "%pre".
 * The installer is written in bash.
 * Packages are installed via dnf.
+
+### Partitioning
+
+* Everything but the ESP should be in lvm partitions inside a luks container.
+* The lvm partitions have small default sizes. The user can extend them later.
+* After installation, the user *should* change the default LUKS key "temppass" to something more secure.
+* Re-installing should preserve the home partition (cf. Goal 2). The LUKS key must be known for this to work.
 
 ### How it started
 
@@ -39,7 +52,7 @@ kernel https://ftp.halifax.rwth-aachen.de/fedora/linux/releases/43/Everything/x8
 initrd https://ftp.halifax.rwth-aachen.de/fedora/linux/releases/43/Everything/x86_64/os/images/pxeboot/initrd.img
 ```
 
-If you have secure boot enabled, you also need to configure a shim:
+If you have secure boot enabled ([n.b.: doesn't work](https://forge.fedoraproject.org/releng/tickets/issues/10765)), you also need to configure a shim:
 
 ```
 shim https://ftp.halifax.rwth-aachen.de/fedora/linux/releases/43/Everything/x86_64/os/EFI/BOOT/BOOTX64.EFI

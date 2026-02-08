@@ -1,0 +1,18 @@
+#!/bin/bash
+#
+# This script is for testing purposes.
+
+if (( $# == 0 )); then
+  jq . "$(dirname $0)/tmp/install/config.json"
+  exit 0
+fi
+
+prop=$1
+
+if [[ $1 = .* ]]; then
+  prop=$1
+else
+  prop=.$1
+fi
+
+jq -r "$prop" "$(dirname $0)/tmp/install/config.json"

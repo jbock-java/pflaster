@@ -1,0 +1,11 @@
+{
+  "rootpw": "$y$j9T$Z8eb91D38tABRM.x4J2KI.$C0.kMwhsPptRWIhQ475Y1HWjxuz7c8DekzpgGlzXSbA",
+  "hostname": "box",
+  "lukskey": "temppass",
+  "users": [{
+    "name": "core",
+    "admin": true,
+    "password": "$y$j9T$BD6.v17tHdBKORTSpeAQ40$4Xuaig3vANEjnt4ZgDV4G7j3dBhLbCcFyfOEI/Svhv1",
+    "sshkey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCmvZwz5BggofSvRQpl9m/hgJCC/PjStggrInuhtiUa927Ir/IHai3hJwtEBViRhl3MOw0jJGPi/s2SJl9Pf7UUOZIoEwxZOT31WFdCMXZNYxwZCAsWzCnYAbQ+3BnUnqLHtlf5yfpaq2YClmJet4ow46Ljfook361C2cfKE1DHcaXM6PJqwPFzv4O+5B1jJtdsyQZ8j5XpaP/h3xAHRsl9mMr8qqJptWUbX1hg16/PLCeyhw6azfuO+Br4ZqUO1UVHlD6MON1cCg6BNz2P7M/QrXo2dHlTtVWVqs35m6Tu8sjhnjBQzUlVSS243O5MPxUz96i7mKIXQRi+7SRiU3xIXoaUMhuMEW50RA0kad+xU2yUYg5G7eU9EI2mZ3A5KKRJCpcvs8XC3+FChBHyDMmtlbzM/Ja97mOtYOl5iBJr0JQa13Pvlrm0JUU4IOjDdXvfquitKo8OZXn/HWkEhwxm2Tw3QHESblmVk1DFVT3WCrJk3xQK1kQX8ncSe4Yc8B8="
+  }]
+}

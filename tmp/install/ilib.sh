@@ -26,7 +26,7 @@ dnf_configure_repos() {
   done
 }
 
-mount_other_things() {
+mount_misc() {
   mount -B -m /proc $sysroot/proc || return $?
   mount -B -m /sys $sysroot/sys || return $?
   mount -B -m /sys/firmware/efi/efivars $sysroot/sys/firmware/efi/efivars || return $?
@@ -44,15 +44,18 @@ os_release() {
 }
 
 dnf_install_rootfs() {
-  dnf4 -y install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+  echo "dnf install: $@"
+  dnf4 -qy --color=never install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
 dnf_remove_rootfs() {
-  dnf4 -y remove --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+  echo "dnf remove: $@"
+  dnf4 -qy --color=never remove --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
 dnf_group_install_rootfs() {
-  dnf4 -y group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+  echo "dnf group install: $@"
+  dnf4 -qy --color=never group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
 mount_rootfs() {
@@ -74,13 +77,13 @@ mount_efisys() {
   mount --mkdir=0700 -o fmask=0077 -o dmask=0077 -o shortname=winnt $device $sysroot/boot/efi
 }
 
-rootfs_configure_hostname() {
+configure_hostname() {
   mkdir -p $sysroot/etc
   # todo: make hostname configurable
   echo "box" > $sysroot/etc/hostname
 }
 
-rootfs_configure_machine_id() {
+configure_machine_id() {
   mkdir -p $sysroot/etc
   head -c 16 /dev/urandom | od -A n -t x1 | sed 's/ //g' > $sysroot/etc/machine-id
 }
@@ -92,13 +95,13 @@ print_cmdline_options() {
   echo "rd.shell"
 }
 
-rootfs_configure_cmdline() {
+configure_cmdline() {
   mkdir -p $sysroot/etc/kernel
   print_cmdline_options | tr '\n' ' ' > $sysroot/etc/kernel/cmdline
   echo >> $sysroot/etc/kernel/cmdline
 }
 
-rootfs_configure_luks() {
+configure_luks() {
   mkdir -p $sysroot/etc/dracut.conf.d
   echo "luks UUID=$(get_uuid pvroot) none discard,tpm2-device=auto" > $sysroot/etc/crypttab
   echo 'add_dracutmodules+=" tpm2-tss lvm "' > $sysroot/etc/dracut.conf.d/tpm2.conf
@@ -110,23 +113,30 @@ print_fstab() {
   echo "UUID=$(get_uuid luks-home) /home     ext4 defaults 1 2"
 }
 
-rootfs_configure_fstab() {
+configure_fstab() {
   mkdir -p $sysroot/etc
   print_fstab >> $sysroot/etc/fstab
 }
 
-rootfs_copy_kernel_install_conf() {
+configure_kernel_install() {
   mkdir -p $sysroot/etc/kernel
   cp $installbase/install.conf $sysroot/etc/kernel/install.conf
 }
 
-rootfs_copy_root_config() {
+configure_rootdir() {
   cat $installbase/aliases.sh >> $sysroot/root/.bashrc
   cp /root/.vimrc $sysroot/root
   cp /root/.bash_profile $sysroot/root
+  cp /tmp/install/config.json $sysroot/root
 }
 
-run_chrooted_install_sdboot() {
+copy_logs() {
+  [[ -f /tmp/install/pflaster.log ]] || return 1
+  mkdir -p $sysroot/var/log/pflaster
+  cp /tmp/install/pflaster.log $sysroot/var/log/pflaster
+}
+
+chrooted_install_sdboot() {
   local bootnum bootnums
   bootnums=$(efibootmgr | sed -n -E 's/^Boot([0-9]+).*\bLinux Boot Manager\b.*$/\1/p')
   for bootnum in $bootnums; do
@@ -137,7 +147,7 @@ run_chrooted_install_sdboot() {
   chroot $sysroot /root/install_sdboot
 }
 
-rootfs_install_packages() {
+install_packages() {
   local deps=(
     vim-enhanced
     vim-default-editor
@@ -151,11 +161,11 @@ rootfs_install_packages() {
   dnf_install_rootfs "${deps[@]}"
 }
 
-rootfs_install_kernel() {
+install_kernel() {
   dnf_install_rootfs kernel-modules-core-$(uname -r)
 }
 
-run_chrooted_postinstall() {
+chrooted_postinstall() {
   mkdir -p $sysroot/root
   cp $installbase/chrooted/postinstall $sysroot/root/postinstall
   chroot $sysroot /root/postinstall
@@ -163,24 +173,29 @@ run_chrooted_postinstall() {
 
 # WARNING! This clears the partition table.
 do_everything() {
-  configure_disk || return $(error "configure_disk")
+
+  # Preparations
+  configure_disk || return $(error "configure disk")
   create_partitions || return $(error "create partitions")
-  mount_rootfs || return $(error "mount_rootfs")
-  mount_home || return $(error "mount_home")
-  mount_efisys || return $(error "mount_efisys")
-  mount_other_things || return $(error "mount_other_things")
-  dnf_setup || return $(error "dnf_setup")
-  rootfs_install_packages || return $(error "rootfs_install_packages")
-  rootfs_configure_hostname || return $(error "rootfs_configure_hostname")
-  rootfs_configure_machine_id || return $(error "rootfs_configure_machine_id")
-  rootfs_configure_cmdline || return $(error "rootfs_configure_cmdline")
-  rootfs_configure_luks || return $(error "rootfs_configure_luks")
-  rootfs_configure_fstab || return $(error "rootfs_configure_fstab")
-  rootfs_copy_kernel_install_conf || return $(error "rootfs_copy_kernel_install_conf")
-  rootfs_copy_root_config || return $(error "rootfs_copy_root_config")
-  run_chrooted_install_sdboot || return $(error "run_chrooted_install_sdboot")
-  rootfs_install_kernel || return $(error "rootfs_install_kernel")
-  run_chrooted_postinstall || return $(error "run_chrooted_postinstall")
+  mount_rootfs || return $(error "mount rootfs")
+  mount_home || return $(error "mount home")
+  mount_efisys || return $(error "mount efisys")
+  mount_misc || return $(error "mount misc")
+  dnf_setup || return $(error "dnf setup")
+
+  # Actual installation begins here
+  install_packages || return $(error "install packages")
+  configure_hostname || return $(error "configure hostname")
+  configure_machine_id || return $(error "configure machine id")
+  configure_cmdline || return $(error "configure cmdline")
+  configure_luks || return $(error "configure luks")
+  configure_fstab || return $(error "configure fstab")
+  configure_kernel_install || return $(error "configure kernel install")
+  configure_rootdir || return $(error "configure rootdir")
+  chrooted_install_sdboot || return $(error "chrooted install sdboot")
+  install_kernel || return $(error "install kernel")
+  chrooted_postinstall || return $(error "chrooted postinstall")
   [[ -f /tmp/stop ]] && { echo "zZz..."; sleep inf ; }
+  copy_logs || return $(error "copy logs")
   reboot
 }
