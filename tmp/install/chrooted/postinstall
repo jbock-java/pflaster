@@ -1,7 +1,7 @@
 #!/bin/bash
 
-do_postinstall() {
-  # todo: make this configurable
+create_admin_user() {
+  # todo: make user configurable
   useradd -m -g wheel -p '$y$j9T$el9zAYHYnL4Oq7jQ9eeYx/$wK0wzF89ZEiy5/WBN1LEnEdeDExDlHofqT/BUzjriS2' core
   mkdir -p /home/core/.ssh
   chmod 700 /home/core/.ssh
@@ -10,10 +10,28 @@ do_postinstall() {
   mkdir -p /home/core/.bashrc.d
   echo "alias ll='ls -lAZ --color=auto'" > /home/core/.bashrc.d/aliases.sh
   chown -R core: /home/core
+}
+
+set_root_pw() {
+  # todo: make root pw configurable
+  echo "newp4sswrd" | passwd --stdin root
+}
+
+configure_sudoers() {
   chmod 640 /etc/sudoers
   sed -i -E 's/^%wheel\b.*/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
   chmod 440 /etc/sudoers
-  echo "timeout 5" >> /boot/efi/loader/loader.conf
+}
+
+configure_sdboot() {
+  echo "timeout 30" >> /boot/efi/loader/loader.conf
+}
+
+do_postinstall() {
+  create_admin_user
+  set_root_pw
+  configure_sudoers
+  configure_sdboot
 }
 
 return 2> /dev/null || {

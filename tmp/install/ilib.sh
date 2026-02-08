@@ -56,10 +56,15 @@ dnf_group_install_rootfs() {
 }
 
 mount_rootfs() {
-  [[ -e $sysroot ]] && return 0
   local device
   device=$(blkid --label luks-root)
   mount -m $device $sysroot
+}
+
+mount_home() {
+  local device
+  device=$(blkid --label luks-home)
+  mount -m $device $sysroot/home
 }
 
 mount_efisys() {
@@ -70,14 +75,12 @@ mount_efisys() {
 }
 
 rootfs_configure_hostname() {
-  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc
-  # todo: make this configurable
+  # todo: make hostname configurable
   echo "box" > $sysroot/etc/hostname
 }
 
 rootfs_configure_machine_id() {
-  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc
   head -c 16 /dev/urandom | od -A n -t x1 | sed 's/ //g' > $sysroot/etc/machine-id
 }
@@ -90,17 +93,15 @@ print_cmdline_options() {
 }
 
 rootfs_configure_cmdline() {
-  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc/kernel
   print_cmdline_options | tr '\n' ' ' > $sysroot/etc/kernel/cmdline
   echo >> $sysroot/etc/kernel/cmdline
 }
 
 rootfs_configure_luks() {
-  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc/dracut.conf.d
   echo "luks UUID=$(get_uuid pvroot) none discard,tpm2-device=auto" > $sysroot/etc/crypttab
-  echo 'add_dracutmodules+=" tpm2-tss debug "' > $sysroot/etc/dracut.conf.d/tpm2.conf
+  echo 'add_dracutmodules+=" tpm2-tss lvm "' > $sysroot/etc/dracut.conf.d/tpm2.conf
 }
 
 print_fstab() {
@@ -110,44 +111,40 @@ print_fstab() {
 }
 
 rootfs_configure_fstab() {
-  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc
   print_fstab >> $sysroot/etc/fstab
 }
 
 rootfs_copy_kernel_install_conf() {
-  [[ -e $sysroot ]] || return 1
   mkdir -p $sysroot/etc/kernel
   cp $installbase/install.conf $sysroot/etc/kernel/install.conf
 }
 
 rootfs_copy_root_config() {
-  [[ -e $sysroot ]] || return 1
   cat $installbase/aliases.sh >> $sysroot/root/.bashrc
   cp /root/.vimrc $sysroot/root
   cp /root/.bash_profile $sysroot/root
 }
 
-run_chrooted_post_sdboot() {
+run_chrooted_install_sdboot() {
   local bootnum bootnums
   bootnums=$(efibootmgr | sed -n -E 's/^Boot([0-9]+).*\bLinux Boot Manager\b.*$/\1/p')
   for bootnum in $bootnums; do
     efibootmgr --bootnum $bootnum --delete-bootnum || return $?
   done
   mkdir -p $sysroot/root
-  cp $installbase/post_sdboot $sysroot/root/post_sdboot
-  chroot $sysroot /root/post_sdboot
+  cp $installbase/chrooted/install_sdboot $sysroot/root
+  chroot $sysroot /root/install_sdboot
 }
 
 rootfs_install_packages() {
-  [[ -e $sysroot ]] || return 1
-  local deps
-  deps=(
+  local deps=(
     vim-enhanced
     vim-default-editor
     systemd-boot-unsigned
     efibootmgr
     selinux-policy
+    lvm2
   )
   dnf_group_install_rootfs core || return $?
   dnf_remove_rootfs nano-default-editor || return $?
@@ -155,19 +152,12 @@ rootfs_install_packages() {
 }
 
 rootfs_install_kernel() {
-  [[ -e $sysroot ]] || return 1
-  local kernel_version=$(uname -r)
-  local deps
-  deps=(
-    kernel-modules-core-$kernel_version
-    kernel-core-$kernel_version
-  )
-  dnf_install_rootfs "${deps[@]}"
+  dnf_install_rootfs kernel-modules-core-$(uname -r)
 }
 
 run_chrooted_postinstall() {
   mkdir -p $sysroot/root
-  cp $installbase/postinstall $sysroot/root/postinstall
+  cp $installbase/chrooted/postinstall $sysroot/root/postinstall
   chroot $sysroot /root/postinstall
 }
 
@@ -176,6 +166,7 @@ do_everything() {
   configure_disk || return $(error "configure_disk")
   create_partitions || return $(error "create partitions")
   mount_rootfs || return $(error "mount_rootfs")
+  mount_home || return $(error "mount_home")
   mount_efisys || return $(error "mount_efisys")
   mount_other_things || return $(error "mount_other_things")
   dnf_setup || return $(error "dnf_setup")
@@ -187,7 +178,7 @@ do_everything() {
   rootfs_configure_fstab || return $(error "rootfs_configure_fstab")
   rootfs_copy_kernel_install_conf || return $(error "rootfs_copy_kernel_install_conf")
   rootfs_copy_root_config || return $(error "rootfs_copy_root_config")
-  run_chrooted_post_sdboot || return $(error "run_chrooted_post_sdboot")
+  run_chrooted_install_sdboot || return $(error "run_chrooted_install_sdboot")
   rootfs_install_kernel || return $(error "rootfs_install_kernel")
   run_chrooted_postinstall || return $(error "run_chrooted_postinstall")
   [[ -f /tmp/stop ]] && { echo "zZz..."; sleep inf ; }
