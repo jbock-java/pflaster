@@ -19,8 +19,9 @@ create_admin_user() {
 }
 
 set_root_pw() {
-  # todo: get_config .rootpw
-  echo "newp4sswrd" | passwd --stdin root
+  chmod 600 /etc/shadow
+  sed -i -E "s/^root:\!unprovisioned:(.*)/root:$(get_config .rootpw):\1/" /etc/shadow
+  chmod 000 /etc/shadow
 }
 
 configure_sudoers() {
