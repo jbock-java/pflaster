@@ -1,5 +1,11 @@
 #!/bin/bash
 
+[[ -v installbase ]] || source /tmp/install/common.sh
+
+get_config() {
+  jq -r "$1" "$installbase/config.json"
+}
+
 create_admin_user() {
   # todo: make user configurable
   useradd -m -g wheel -p '$y$j9T$el9zAYHYnL4Oq7jQ9eeYx/$wK0wzF89ZEiy5/WBN1LEnEdeDExDlHofqT/BUzjriS2' core
@@ -13,7 +19,7 @@ create_admin_user() {
 }
 
 set_root_pw() {
-  # todo: make root pw configurable
+  # todo: get_config .rootpw
   echo "newp4sswrd" | passwd --stdin root
 }
 

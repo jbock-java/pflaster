@@ -154,11 +154,18 @@ install_packages() {
     systemd-boot-unsigned
     efibootmgr
     selinux-policy
+    jq
     lvm2
   )
   dnf_group_install_rootfs core || return $?
   dnf_remove_rootfs nano-default-editor || return $?
   dnf_install_rootfs "${deps[@]}"
+}
+
+copy_common() {
+  mkdir -p $sysroot/$installbase
+  cp $installbase/common.sh $sysroot/$installbase || return 1
+  cp $installbase/config.json $sysroot/$installbase
 }
 
 install_kernel() {
@@ -185,6 +192,7 @@ do_everything() {
 
   # Actual installation begins here
   install_packages || return $(error "install packages")
+  copy_common || return $(error "copy common")
   configure_hostname || return $(error "configure hostname")
   configure_machine_id || return $(error "configure machine id")
   configure_cmdline || return $(error "configure cmdline")
