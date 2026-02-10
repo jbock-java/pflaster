@@ -203,7 +203,7 @@ do_everything() {
   chrooted_install_sdboot || return $(error "chrooted install sdboot")
   install_kernel || return $(error "install kernel")
   chrooted_postinstall || return $(error "chrooted postinstall")
-  [[ -f /tmp/stop ]] && { echo "zZz..."; sleep inf ; }
+  [[ -f /tmp/stop ]] && { echo "zZz..." ; sleep inf ; }
   copy_logs || return $(error "copy logs")
   reboot
 }

@@ -10,9 +10,9 @@
 
 1. TODO: The installed system should behave like any other fedora installation.
 2. [support LUKS devices that are unlocked outside the installer](https://bugzilla.redhat.com/show_bug.cgi?id=2019455)
-3. TODO: Unlocking via tpm should work out of the box.
+3. Automatic disk unlocking via tpm should work out of the box.
 4. systemd-boot by default
-5. TODO: RAID, non-ext4 filesystems. PRs welcome.
+5. TODO: btrfs
 
 ### Architectural overview
 

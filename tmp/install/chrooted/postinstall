@@ -6,21 +6,43 @@ get_config() {
   jq -r "$1" "$installbase/config.json"
 }
 
-create_admin_user() {
-  # todo: make user configurable
-  useradd -m -g wheel -p '$y$j9T$el9zAYHYnL4Oq7jQ9eeYx/$wK0wzF89ZEiy5/WBN1LEnEdeDExDlHofqT/BUzjriS2' core
-  mkdir -p /home/core/.ssh
-  chmod 700 /home/core/.ssh
-  echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCmvZwz5BggofSvRQpl9m/hgJCC/PjStggrInuhtiUa927Ir/IHai3hJwtEBViRhl3MOw0jJGPi/s2SJl9Pf7UUOZIoEwxZOT31WFdCMXZNYxwZCAsWzCnYAbQ+3BnUnqLHtlf5yfpaq2YClmJet4ow46Ljfook361C2cfKE1DHcaXM6PJqwPFzv4O+5B1jJtdsyQZ8j5XpaP/h3xAHRsl9mMr8qqJptWUbX1hg16/PLCeyhw6azfuO+Br4ZqUO1UVHlD6MON1cCg6BNz2P7M/QrXo2dHlTtVWVqs35m6Tu8sjhnjBQzUlVSS243O5MPxUz96i7mKIXQRi+7SRiU3xIXoaUMhuMEW50RA0kad+xU2yUYg5G7eU9EI2mZ3A5KKRJCpcvs8XC3+FChBHyDMmtlbzM/Ja97mOtYOl5iBJr0JQa13Pvlrm0JUU4IOjDdXvfquitKo8OZXn/HWkEhwxm2Tw3QHESblmVk1DFVT3WCrJk3xQK1kQX8ncSe4Yc8B8=" > /home/core/.ssh/authorized_keys
-  chmod 600 /home/core/.ssh/authorized_keys
-  mkdir -p /home/core/.bashrc.d
-  echo "alias ll='ls -lAZ --color=auto'" > /home/core/.bashrc.d/aliases.sh
-  chown -R core: /home/core
+get_users() {
+  jq -r '.users | keys[]' "$installbase/config.json"
+}
+
+create_user() {
+  local sshkey user=$1
+  useradd -m -U -p "$(get_config .users.$user.password)" "$user"
+  if [[ $(get_config .users.$user.admin) = "true" ]]; then
+    usermod -a -G wheel "$user"
+  fi
+  sshkey="$(get_config .users.$user.sshkey)"
+  if [[ ${sshkey:-null} != "null" ]]; then
+    mkdir -p /home/$user/.ssh
+    chmod 700 /home/$user/.ssh
+    echo "$sshkey" > /home/$user/.ssh/authorized_keys
+    chmod 600 /home/$user/.ssh/authorized_keys
+  fi
+  mkdir -p /home/$user/.bashrc.d
+  echo "alias ll='ls -lAZ --color=auto'" > /home/$user/.bashrc.d/aliases.sh
+  chown -R $user: /home/$user
+}
+
+create_users() {
+  local user users=$(get_users)
+  for user in "$users"; do
+    create_user $user
+  done
 }
 
 set_root_pw() {
+  local rootpw
+  rootpw=$(get_config .rootpw)
+  if [[ ${rootpw:-null} = "null" ]]; then
+    return 0
+  fi
   chmod 600 /etc/shadow
-  sed -i -E "s/^root:\!unprovisioned:(.*)/root:$(get_config .rootpw):\1/" /etc/shadow
+  sed -i -E "s@^root:\!unprovisioned:(.*)@root:$rootpw:\1@" /etc/shadow
   chmod 000 /etc/shadow
 }
 
@@ -34,11 +56,21 @@ configure_sdboot() {
   echo "timeout 30" >> /boot/efi/loader/loader.conf
 }
 
+configure_tpm_unlocking() {
+  has_tpm || return 0
+  local device=$(blkid --label pvroot)
+  echo -n temppass > /tmp/temppass
+  chmod 600 /tmp/temppass
+  systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "" --unlock-key-file /tmp/temppass $device || return 1
+  dracut --quiet -f --kver $(uname -r)
+}
+
 do_postinstall() {
-  create_admin_user
-  set_root_pw
-  configure_sudoers
-  configure_sdboot
+  create_users || return $(error "create users")
+  set_root_pw || return $(error "set root pw")
+  configure_sudoers || return $(error "configure sudoers")
+  configure_sdboot || return $(error "configure sudoers")
+  configure_tpm_unlocking
 }
 
 return 2> /dev/null || {

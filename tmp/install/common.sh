@@ -5,6 +5,10 @@ error() {
   echo 1
 }
 
+has_tpm() {
+  [[ -a /sys/class/tpm ]] && ls /sys/class/tpm/tpm* &> /dev/null
+}
+
 get_disks() {
   lsblk -n --filter "TYPE=='disk' && RM==0 && MOUNTPOINT!='[SWAP]'" -o KNAME | tr '\n' ' '
 }
