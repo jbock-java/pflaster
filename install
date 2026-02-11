@@ -1,8 +1,6 @@
 #!/bin/bash
 #
-# This script is for testing purposes.
-
-[[ $EUID = "0" ]] || { echo "need root" ; exit 1 ; }
+# This script is used for testing purposes.
 
 [[ -d /tmp/install ]] && rm /tmp/install/*
 mkdir -p /tmp/install

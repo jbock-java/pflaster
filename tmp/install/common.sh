@@ -26,6 +26,10 @@ get_uuid() {
   lsblk -n --filter "LABEL == '$1'" -o UUID
 }
 
+get_config() {
+  jq -M -r "$1" "$installbase/config.json"
+}
+
 configure_disk() {
   [[ -f $installbase/disk ]] && return 0
   local path disks REPLY lsblk_printed=false

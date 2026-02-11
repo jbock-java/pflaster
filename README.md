@@ -8,22 +8,21 @@
 
 ### Goals
 
-1. TODO: The installed system should behave like any other fedora installation.
+1. The installed system should behave like any other fedora installation.
 2. [support LUKS devices that are unlocked outside the installer](https://bugzilla.redhat.com/show_bug.cgi?id=2019455)
 3. Automatic disk unlocking via tpm should work out of the box.
 4. systemd-boot by default
-5. TODO: btrfs
+5. Focus on unattended installation.
 
 ### Architectural overview
 
 * We use the "Everything" fedora spin.
 * Anaconda is used, but only as an entry point. In kickstart terms: the entire installation happens in "%pre".
 * The installer is written in bash.
-* Packages are installed via dnf.
 
 ### Partitioning
 
-This is the default partitioning:
+This is the current partitioning:
 
 ```
 [core@box ~]$ lsblk -i -o NAME,TYPE,FSTYPE,LABEL,SIZE,MOUNTPOINTS
@@ -37,14 +36,12 @@ sda             disk                        25.9G
 zram0           disk  swap        zram0        8G [SWAP]
 ```
 
-* Everything but the efi partition (sda1) is encrypted.
+* Everything but the EFI partition (sda1) is encrypted.
 * When unlocked, the crypted partition (sda2) contains an lvm volume group.
 * You can add more lvm partitions later. For example, a second swap device.
 * The installer creates the lvm partitions with minimal default sizes. You can extend them later.
 * Currently, the installer sets a LUKS key "temppass". You may want to change this after installation.
-* TODO: If a partition labeled "pvroot" exists, the installer should prompt for the LUKS key. The lvm partition labeled "luks-home" will be preserved.
-* TODO: Allow package configuration.
-* TODO: Configurable user creation and root pw.
+* If the installer finds a partition labeled "pvroot", it will prompt for the LUKS key. If pvroot can be unlocked, any "luks-home" inside will be preserved.
 
 ### How it started
 
@@ -105,3 +102,12 @@ Press "e" to edit the installer's kernel command line options.
 
 At the end of the line starting with "linux", add an option `inst.ks=http://192.168.178.22:3001/manual.cfg`,
 assuming your http server runs on `192.168.178.22`.
+
+### TODO
+
+* configure ntp or something
+* extend [the config](https://github.com/jbock-java/pflaster/blob/main/tmp/install/config.json)
+* override config via http
+* configurable package selection
+* btrfs?
+* Stop being a kickstart script. We can do without anaconda.

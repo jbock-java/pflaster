@@ -31,18 +31,35 @@ print_parted_commands() {
   (( pos += pvrootsize ))
 }
 
-# WARNING! This clears the partition table.
+gen_new_lukskey() {
+  local reply0 reply1
+  read -rsp "Choose lukskey: " reply0
+  echo
+  [[ -n $reply0 ]] || return 1
+  read -rsp "Confirm lukskey: " reply1
+  echo
+  [[ $reply0 = "$reply1" ]] || return 1
+  echo -n "$reply0" > $installbase/lukskey
+}
+
 create_partitions() {
-  local disk part pvroot luksroot
+  local disk part pvroot luksroot lukskey
+  lukskey=$(get_config .lukskey)
+  if [[ ${lukskey:-null} = "null" ]]; then
+    while true; do
+      gen_new_lukskey && break
+    done
+  else
+    echo -n "$lukskey" > $installbase/lukskey
+  fi
   disk=$(get_disk) || return $(error "get_disk")
   parted --script --align optimal $disk -- $(print_parted_commands) || return $(error "parted")
   mkfs.vfat -n EFISYS -F 32 $(by_partlabel EFISYS) || return $(error "mkfs vfat")
-  echo -n temppass > /tmp/temppass
-  chmod 600 /tmp/temppass
   pvroot=$(by_partlabel pvroot)
-  cryptsetup luksFormat --batch-mode $pvroot /tmp/temppass || return $(error "luksFormat")
-  cryptsetup luksOpen --batch-mode --key-file=/tmp/temppass $pvroot luks || return $(error "luksOpen")
-  cryptsetup config $pvroot --label pvroot || return $(error "cryptsetup config")
+  chmod 600 $installbase/lukskey
+  cryptsetup luksFormat --force-password --batch-mode $pvroot $installbase/lukskey || return $(error "crypt format")
+  cryptsetup luksOpen --batch-mode --key-file=$installbase/lukskey $pvroot luks || return $(error "crypt open")
+  cryptsetup config $pvroot --label pvroot || return $(error "crypt label")
   luksroot=$(get_only_child $pvroot) || return $(error "find luksroot")
   pvcreate $luksroot || return $(error "pvcreate")
   vgcreate luks $luksroot || return $(error "vgcreate")
@@ -50,4 +67,48 @@ create_partitions() {
   lvcreate -L 2048M -n home luks || return $(error "lvcreate home")
   mkfs.ext4 -q -L luks-root /dev/mapper/luks-root <<< y || return $(error "ext4 root")
   mkfs.ext4 -q -L luks-home /dev/mapper/luks-home <<< y || return $(error "ext4 home")
+}
+
+get_existing_lukskey() {
+  local REPLY pvroot
+  pvroot=$(blkid --label pvroot 2> /dev/null) || return 1
+  echo "Found pvroot: $pvroot"
+  read -rsp "Enter lukskey, or leave empty to wipe: "
+  echo
+  if [[ -z $REPLY ]]; then
+    return 125
+  fi
+  echo -n "$REPLY" > $installbase/lukskey
+  chmod 600 $installbase/lukskey
+  cryptsetup luksOpen -q --disable-external-tokens --key-file $installbase/lukskey --test-passphrase $pvroot
+}
+
+unlock_pvroot() {
+  [[ -f $installbase/lukskey ]] || return 1
+  local pvroot
+  pvroot=$(blkid --label pvroot 2> /dev/null) || return 1
+  cryptsetup luksOpen -q --disable-external-tokens --key-file $installbase/lukskey $pvroot luks || return
+  vgchange -ay
+}
+
+prepare_partitions() {
+  if blkid --label pvroot &> /dev/null; then
+    while true; do
+      get_existing_lukskey
+      case $? in
+        125) break ;;
+        0)
+          unlock_pvroot
+          return
+          ;;
+       esac
+    done
+  fi
+  local REPLY
+  while true; do
+    read -rp "Erase all data on $(get_disk)? [y/N] "
+    [[ $REPLY =~ [yY] ]] && break
+    [[ $REPLY =~ [nN] ]] && { echo "I sleep."; sleep inf ; }
+  done
+  create_partitions
 }

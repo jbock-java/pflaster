@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# This script is for testing purposes.
+# This script is used for testing purposes.
 
 if (( $# == 0 )); then
   jq . "$(dirname $0)/tmp/install/config.json"
@@ -15,4 +15,4 @@ else
   prop=.$1
 fi
 
-jq -r "$prop" "$(dirname $0)/tmp/install/config.json"
+jq -M -r "$prop" "$(dirname $0)/tmp/install/config.json"

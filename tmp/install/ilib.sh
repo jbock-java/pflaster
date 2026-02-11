@@ -27,9 +27,9 @@ dnf_configure_repos() {
 }
 
 mount_misc() {
-  mount -B -m /proc $sysroot/proc || return $?
-  mount -B -m /sys $sysroot/sys || return $?
-  mount -B -m /sys/firmware/efi/efivars $sysroot/sys/firmware/efi/efivars || return $?
+  mount -B -m /proc $sysroot/proc || return
+  mount -B -m /sys $sysroot/sys || return
+  mount -B -m /sys/firmware/efi/efivars $sysroot/sys/firmware/efi/efivars || return
   mount -B -m /dev $sysroot/dev
 }
 
@@ -71,16 +71,16 @@ mount_home() {
 }
 
 mount_efisys() {
-  [[ -e $sysroot/boot/efi ]] && return 0
   local device
-  device=$(blkid --label EFISYS)
+  device=$(blkid --label EFISYS) || return
   mount --mkdir=0700 -o fmask=0077 -o dmask=0077 -o shortname=winnt $device $sysroot/boot/efi
 }
 
 configure_hostname() {
   mkdir -p $sysroot/etc
-  # todo: make hostname configurable
-  echo "box" > $sysroot/etc/hostname
+  local hostname
+  hostname="$(get_config .hostname)"
+  echo "${hostname:-box}" > $sysroot/etc/hostname
 }
 
 configure_machine_id() {
@@ -131,16 +131,16 @@ configure_rootdir() {
 }
 
 copy_logs() {
-  [[ -f /tmp/install/pflaster.log ]] || return 1
+  [[ -f $installbase/pflaster.log ]] || return 1
   mkdir -p $sysroot/var/log/pflaster
-  cp /tmp/install/pflaster.log $sysroot/var/log/pflaster
+  cp $installbase/pflaster.log $sysroot/var/log/pflaster
 }
 
 chrooted_install_sdboot() {
   local bootnum bootnums
   bootnums=$(efibootmgr | sed -n -E 's/^Boot([0-9]+).*\bLinux Boot Manager\b.*$/\1/p')
   for bootnum in $bootnums; do
-    efibootmgr --bootnum $bootnum --delete-bootnum || return $?
+    efibootmgr --bootnum $bootnum --delete-bootnum || return
   done
   mkdir -p $sysroot/root
   cp $installbase/chrooted/install_sdboot $sysroot/root
@@ -157,8 +157,8 @@ install_packages() {
     jq
     lvm2
   )
-  dnf_group_install_rootfs core || return $?
-  dnf_remove_rootfs nano-default-editor || return $?
+  dnf_group_install_rootfs core || return
+  dnf_remove_rootfs nano-default-editor || return
   dnf_install_rootfs "${deps[@]}"
 }
 
@@ -178,12 +178,11 @@ chrooted_postinstall() {
   chroot $sysroot /root/postinstall
 }
 
-# WARNING! This clears the partition table.
 do_everything() {
 
   # Preparations
   configure_disk || return $(error "configure disk")
-  create_partitions || return $(error "create partitions")
+  prepare_partitions || return $(error "prepare partitions")
   mount_rootfs || return $(error "mount rootfs")
   mount_home || return $(error "mount home")
   mount_efisys || return $(error "mount efisys")

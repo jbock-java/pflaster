@@ -2,20 +2,28 @@
 
 [[ -v installbase ]] || source /tmp/install/common.sh
 
-get_config() {
-  jq -r "$1" "$installbase/config.json"
-}
-
 get_users() {
   jq -r '.users | keys[]' "$installbase/config.json"
 }
 
 create_user() {
-  local sshkey user=$1
-  useradd -m -U -p "$(get_config .users.$user.password)" "$user"
+  local user_exists user=$1
+  if [[ -e /home/$user ]]; then
+    user_exists=1
+  fi
+  if [[ $user_exists ]]; then
+    useradd -m -U -p "$(get_config .users.$user.password)" "$user"
+  else
+    useradd -U -p "$(get_config .users.$user.password)" "$user"
+  fi
   if [[ $(get_config .users.$user.admin) = "true" ]]; then
     usermod -a -G wheel "$user"
   fi
+  if [[ $user_exists ]]; then
+    chown -R $user: /home/$user
+    return 0
+  fi
+  local sshkey
   sshkey="$(get_config .users.$user.sshkey)"
   if [[ ${sshkey:-null} != "null" ]]; then
     mkdir -p /home/$user/.ssh
