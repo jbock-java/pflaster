@@ -105,9 +105,8 @@ assuming your http server runs on `192.168.178.22`.
 
 ### TODO
 
-* configure ntp or something
-* extend [the config](https://github.com/jbock-java/pflaster/blob/main/tmp/install/config.json)
-* override config via http
+* more [config options](https://github.com/jbock-java/pflaster/blob/main/tmp/install/config.json)
+* make it possible to override the config via http
 * configurable package selection
 * btrfs?
 * Stop being a kickstart script. We can do without anaconda.

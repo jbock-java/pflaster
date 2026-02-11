@@ -2,6 +2,4 @@
 #
 # This script is used for testing purposes.
 
-[[ -d /tmp/install ]] && rm /tmp/install/*
-mkdir -p /tmp/install
-cp tmp/install/* /tmp/install
+install -d -C $(dirname $0)/tmp/install /tmp/install

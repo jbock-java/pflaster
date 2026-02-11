@@ -85,10 +85,13 @@ get_existing_lukskey() {
 
 unlock_pvroot() {
   [[ -f $installbase/lukskey ]] || return 1
+  blkid --label EFISYS &> /dev/null || return $(error "no such label: EFISYS")
   local pvroot
   pvroot=$(blkid --label pvroot 2> /dev/null) || return 1
   cryptsetup luksOpen -q --disable-external-tokens --key-file $installbase/lukskey $pvroot luks || return
   vgchange -ay
+  blkid --label luks-root &> /dev/null || return $(error "no such label: luks-root")
+  blkid --label luks-home &> /dev/null || return $(error "no such label: luks-home")
 }
 
 prepare_partitions() {
@@ -108,7 +111,7 @@ prepare_partitions() {
   while true; do
     read -rp "Erase all data on $(get_disk)? [y/N] "
     [[ $REPLY =~ [yY] ]] && break
-    [[ $REPLY =~ [nN] ]] && { echo "I sleep."; sleep inf ; }
+    [[ $REPLY =~ [nN] ]] && { echo "I sleep." ; sleep inf ; }
   done
   create_partitions
 }

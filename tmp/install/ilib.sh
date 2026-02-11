@@ -155,6 +155,7 @@ install_packages() {
     efibootmgr
     selinux-policy
     jq
+    ntpsec
     lvm2
   )
   dnf_group_install_rootfs core || return
