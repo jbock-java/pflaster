@@ -34,6 +34,10 @@ get_config() {
   fi
 }
 
+has_modifier() {
+  jq -M -r '.modifiers[]' "$installbase/config.json" | grep -q "^$1$"
+}
+
 configure_disk() {
   [[ -f $installbase/disk ]] && return 0
   local path disks REPLY lsblk_printed=false

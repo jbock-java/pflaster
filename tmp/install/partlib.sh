@@ -46,12 +46,15 @@ gen_new_lukskey() {
 create_partitions() {
   local disk part pvroot luksroot lukskey rootsize homesize
   lukskey=$(get_config .lukskey)
-  if [[ ${lukskey:-null} = "null" ]]; then
+  if [[ $lukskey ]]; then
+    echo -n "$lukskey" > $installbase/lukskey
+  else
+    if has_modifier "noask"; then
+      return $(error "in noask mode, lukskey must be configured")
+    fi
     while true; do
       gen_new_lukskey && break
     done
-  else
-    echo -n "$lukskey" > $installbase/lukskey
   fi
   disk=$(get_disk) || return $(error "get_disk")
   parted --script --align optimal $disk -- $(print_parted_commands) || return $(error "parted")
@@ -76,8 +79,15 @@ get_existing_lukskey() {
   local REPLY pvroot
   pvroot=$(blkid --label pvroot 2> /dev/null) || return 1
   echo "Found pvroot: $pvroot"
-  read -rsp "Enter lukskey, or leave empty to wipe: "
-  echo
+  if has_modifier "noask"; then
+    REPLY=$(get_config .lukskey)
+    if [[ -z $REPLY ]]; then
+      return $(error "in noask mode, lukskey must be configured")
+    fi
+  else
+    read -rsp "Enter lukskey, or leave empty to wipe: "
+    echo
+  fi
   if [[ -z $REPLY ]]; then
     return 125
   fi
@@ -100,7 +110,7 @@ unlock_pvroot() {
 }
 
 prepare_partitions() {
-  if blkid --label pvroot &> /dev/null; then
+  if ! has_modifier "always-wipe" && blkid --label pvroot &> /dev/null; then
     while true; do
       get_existing_lukskey
       case $? in
@@ -109,14 +119,16 @@ prepare_partitions() {
           unlock_pvroot
           return
           ;;
-       esac
+      esac
     done
   fi
-  local REPLY
-  while true; do
-    read -rp "Erase all data on $(get_disk)? [y/N] "
-    [[ $REPLY =~ [yY] ]] && break
-    [[ $REPLY =~ [nN] ]] && { echo "I sleep." ; sleep inf ; }
-  done
+  if ! has_modifier "noask"; then
+    local REPLY
+    while true; do
+      read -rp "Erase all data on $(get_disk)? [y/N] "
+      [[ $REPLY =~ [yY] ]] && break
+      [[ $REPLY =~ [nN] ]] && { echo "I sleep." ; sleep inf ; }
+    done
+  fi
   create_partitions
 }

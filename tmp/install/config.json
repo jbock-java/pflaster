@@ -2,6 +2,8 @@
   "rootpw": "$y$j9T$Z8eb91D38tABRM.x4J2KI.$C0.kMwhsPptRWIhQ475Y1HWjxuz7c8DekzpgGlzXSbA",
   "hostname": "box",
   "lukskey": "temppass",
+  "modifiers": [
+  ],
   "users": {
     "core": {
       "admin": true,
@@ -25,5 +27,11 @@
     "jq",
     "ntpsec",
     "lvm2"
+  ],
+  "comments": [
+    "Json does not have comments yet, so we put them here.",
+    "Possible modifiers:",
+    "    noask         # Never ask any questions, fail if something is missing.",
+    "    always-wipe   # DANGEROUS: Ignore any existing partitions, always wipe the whole disk."
   ]
 }
