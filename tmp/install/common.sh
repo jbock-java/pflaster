@@ -27,7 +27,11 @@ get_uuid() {
 }
 
 get_config() {
-  jq -M -r "$1" "$installbase/config.json"
+  local result
+  result=$(jq -M -r "$1" "$installbase/config.json")
+  if [[ $result != "null" ]]; then
+    echo $result
+  fi
 }
 
 configure_disk() {
@@ -55,4 +59,56 @@ configure_disk() {
 get_disk() {
   [[ -f $installbase/disk ]] || return 1
   cat $installbase/disk
+}
+
+get_packages_groups() {
+  local packages result=()
+  packages=$(get_config '.packages[]') || return
+  for pack in $packages; do
+    if [[ $pack = @* && $pack != @^* ]]; then
+      result+=(${pack:1})
+    fi
+  done
+  if (( ${#pack[@]} > 0 )); then
+    echo ${result[@]}
+  fi
+}
+
+get_packages_environments() {
+  local packages result=()
+  packages=$(get_config '.packages[]') || return
+  for pack in $packages; do
+    if [[ $pack = @^* ]]; then
+      result+=(${pack:2})
+    fi
+  done
+  if (( ${#pack[@]} > 0 )); then
+    echo ${result[@]}
+  fi
+}
+
+get_packages_excludes() {
+  local packages result=()
+  packages=$(get_config '.packages[]') || return
+  for pack in $packages; do
+    if [[ $pack = -* ]]; then
+      result+=(${pack:1})
+    fi
+  done
+  if (( ${#pack[@]} > 0 )); then
+    echo ${result[@]}
+  fi
+}
+
+get_packages_regular() {
+  local packages result=()
+  packages=$(get_config '.packages[]') || return
+  for pack in $packages; do
+    if [[ $pack != @* && $pack != -* ]]; then
+      result+=($pack)
+    fi
+  done
+  if (( ${#pack[@]} > 0 )); then
+    echo ${result[@]}
+  fi
 }

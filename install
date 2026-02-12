@@ -2,4 +2,5 @@
 #
 # This script is used for testing purposes.
 
-install -d -C $(dirname $0)/tmp/install /tmp/install
+install -d $(dirname $0)/tmp/install /tmp/install
+cp -r $(dirname $0)/tmp/install /tmp

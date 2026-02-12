@@ -53,6 +53,11 @@ dnf_remove_rootfs() {
   dnf4 -qy --color=never remove --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
+dnf_environment_install_rootfs() {
+  echo "dnf environment install: $@"
+  dnf4 -qy --color=never environment install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+}
+
 dnf_group_install_rootfs() {
   echo "dnf group install: $@"
   dnf4 -qy --color=never group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
@@ -148,19 +153,24 @@ chrooted_install_sdboot() {
 }
 
 install_packages() {
-  local deps=(
-    vim-enhanced
-    vim-default-editor
-    systemd-boot-unsigned
-    efibootmgr
-    selinux-policy
-    jq
-    ntpsec
-    lvm2
-  )
-  dnf_group_install_rootfs core || return
-  dnf_remove_rootfs nano-default-editor || return
-  dnf_install_rootfs "${deps[@]}"
+  local pack_env pack_group pack_exclude pack_regular
+  pack_env=$(get_packages_environments)
+  pack_group=$(get_packages_groups)
+  pack_exclude=$(get_packages_excludes)
+  pack_regular=$(get_packages_regular)
+  if [[ $pack_env ]]; then
+    dnf_environment_install_rootfs $pack_env || return
+  fi
+  if [[ $pack_group ]]; then
+    dnf_group_install_rootfs $pack_group || return
+  fi
+  if [[ $pack_exclude ]]; then
+    dnf_remove_rootfs $pack_exclude || return
+  fi
+  if [[ $pack_regular ]]; then
+    dnf_install_rootfs $pack_regular || return
+  fi
+  return 0
 }
 
 copy_common() {

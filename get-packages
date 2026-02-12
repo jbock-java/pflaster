@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# This script is used for testing purposes.
+
+config="$(dirname $0)/tmp/install/config.json"
+
+get_all_packages() {
+  jq -r '.packages[]' $config
+}
+
+get_packages_groups() {
+  local packages
+  packages=$(get_all_packages) || return
+  for pack in $packages; do
+    if [[ $pack = @* && $pack != @^* ]]; then
+      echo ${pack:1}
+    fi
+  done
+}
+
+get_packages_environments() {
+  local packages
+  packages=$(get_all_packages) || return
+  for pack in $packages; do
+    if [[ $pack = @^* ]]; then
+      echo ${pack:2}
+    fi
+  done
+}
+
+get_packages_excludes() {
+  local packages
+  packages=$(get_all_packages) || return
+  for pack in $packages; do
+    if [[ $pack = -* ]]; then
+      echo ${pack:1}
+    fi
+  done
+}
+
+get_packages_regular() {
+  local packages result=()
+  packages=$(get_all_packages) || return
+  for pack in $packages; do
+    if [[ $pack != @* && $pack != -* ]]; then
+      result+=($pack)
+    fi
+  done
+  if (( ${#pack[@]} > 0 )); then
+    echo ${result[@]}
+  fi
+}
+
+return 2> /dev/null || {
+  if [[ -z $1 ]]; then
+    get_packages_regular
+  else
+    case $1 in
+      gr*)
+        get_packages_groups
+        ;;
+      en*)
+        get_packages_environments
+        ;;
+      ex*)
+        get_packages_excludes
+        ;;
+      *)
+        exit 1
+        ;;
+    esac
+  fi
+}

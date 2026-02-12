@@ -18,9 +18,10 @@ get_only_child() {
 }
 
 print_parted_commands() {
-  local disksize
+  local disksize efizsize
   disksize=$(get_disksize)
-  local efisize=2044
+  efisize=$(get_config .defaultsize.efisys)
+  efisize=${efisize:-2044}
   local pvrootsize=$(( disksize - efisize - 32 ))
   local pos=4
   echo "mklabel gpt"
@@ -43,7 +44,7 @@ gen_new_lukskey() {
 }
 
 create_partitions() {
-  local disk part pvroot luksroot lukskey
+  local disk part pvroot luksroot lukskey rootsize homesize
   lukskey=$(get_config .lukskey)
   if [[ ${lukskey:-null} = "null" ]]; then
     while true; do
@@ -63,8 +64,10 @@ create_partitions() {
   luksroot=$(get_only_child $pvroot) || return $(error "find luksroot")
   pvcreate $luksroot || return $(error "pvcreate")
   vgcreate luks $luksroot || return $(error "vgcreate")
-  lvcreate -L 8192M -n root luks || return $(error "lvcreate root")
-  lvcreate -L 2048M -n home luks || return $(error "lvcreate home")
+  rootsize=$(get_config .defaultsize.root)
+  homesize=$(get_config .defaultsize.home)
+  lvcreate -L ${rootsize:-8192}M -n root luks || return $(error "lvcreate root")
+  lvcreate -L ${homesize:-2048}M -n home luks || return $(error "lvcreate home")
   mkfs.ext4 -q -L luks-root /dev/mapper/luks-root <<< y || return $(error "ext4 root")
   mkfs.ext4 -q -L luks-home /dev/mapper/luks-home <<< y || return $(error "ext4 home")
 }
@@ -85,13 +88,15 @@ get_existing_lukskey() {
 
 unlock_pvroot() {
   [[ -f $installbase/lukskey ]] || return 1
-  blkid --label EFISYS &> /dev/null || return $(error "no such label: EFISYS")
-  local pvroot
+  local pvroot luks_root efisys
+  efisys=$(blkid --label EFISYS) || return $(error "no such label: EFISYS")
   pvroot=$(blkid --label pvroot 2> /dev/null) || return 1
   cryptsetup luksOpen -q --disable-external-tokens --key-file $installbase/lukskey $pvroot luks || return
   vgchange -ay
-  blkid --label luks-root &> /dev/null || return $(error "no such label: luks-root")
-  blkid --label luks-home &> /dev/null || return $(error "no such label: luks-home")
+  luksroot=$(blkid --label luks-root) || return $(error "no such label: luks-root")
+  blkid --label luks-home || return $(error "no such label: luks-home")
+  mkfs.ext4 -q -L luks-root $luksroot <<< y || return $(error "mkfs luks-root")
+  mkfs.vfat -n EFISYS -F 32 $efisys || return $(error "mkfs efisys")
 }
 
 prepare_partitions() {
