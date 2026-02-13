@@ -141,6 +141,11 @@ copy_logs() {
   cp $installbase/pflaster.log $sysroot/var/log/pflaster
 }
 
+copy_dnf_config() {
+  mkdir -p $sysroot/etc/yum.repos.d
+  cp /etc/yum.repos.d/*.repo $sysroot/etc/yum.repos.d
+}
+
 chrooted_install_sdboot() {
   local bootnum bootnums
   bootnums=$(efibootmgr | sed -n -E 's/^Boot([0-9]+).*\bLinux Boot Manager\b.*$/\1/p')
@@ -213,7 +218,8 @@ do_everything() {
   chrooted_install_sdboot || return $(error "chrooted install sdboot")
   install_kernel || return $(error "install kernel")
   chrooted_postinstall || return $(error "chrooted postinstall")
-  [[ -f /tmp/stop ]] && { echo "zZz..." ; sleep inf ; }
+  copy_dnf_config || return $(error "copy dnf config")
   copy_logs || return $(error "copy logs")
+  [[ -f /tmp/stop ]] && { echo "zZz..." ; sleep inf ; }
   reboot
 }
