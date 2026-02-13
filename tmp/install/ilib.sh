@@ -148,7 +148,7 @@ copy_dnf_config() {
 
 chrooted_install_sdboot() {
   local bootnum bootnums
-  bootnums=$(efibootmgr | sed -n -E 's/^Boot([0-9]+).*\bLinux Boot Manager\b.*$/\1/p')
+  bootnums=$(efibootmgr | sed -n -E 's/^Boot([A-F0-9]+)\b.*\bLinux Boot Manager\b.*$/\1/p')
   for bootnum in $bootnums; do
     efibootmgr --bootnum $bootnum --delete-bootnum || return
   done
