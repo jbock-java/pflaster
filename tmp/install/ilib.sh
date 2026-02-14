@@ -2,8 +2,6 @@
 
 source $installbase/partlib.sh
 
-sysroot=/mnt/sysroot
-
 dnf_configure_repos() {
   mkdir -p $sysroot/etc/yum.repos.d
   for repo in /etc/yum.repos.d/*.repo; do
@@ -27,10 +25,11 @@ dnf_configure_repos() {
 }
 
 mount_misc() {
-  mount -B -m /proc $sysroot/proc || return
-  mount -B -m /sys $sysroot/sys || return
-  mount -B -m /sys/firmware/efi/efivars $sysroot/sys/firmware/efi/efivars || return
-  mount -B -m /dev $sysroot/dev
+  remount /proc || return
+  remount /sys || return
+  remount /run || return
+  remount /sys/firmware/efi/efivars || return
+  remount /dev || return
 }
 
 dnf_setup() {
@@ -93,34 +92,14 @@ configure_machine_id() {
   head -c 16 /dev/urandom | od -A n -t x1 | sed 's/ //g' > $sysroot/etc/machine-id
 }
 
-print_cmdline_options() {
-  echo "root=UUID=$(get_uuid luks-root)"
-  echo "rd.luks.uuid=$(get_uuid pvroot)"
-  echo "rd.lvm.vg=luks"
-  echo "rd.shell"
-}
-
-configure_cmdline() {
-  mkdir -p $sysroot/etc/kernel
-  print_cmdline_options | tr '\n' ' ' > $sysroot/etc/kernel/cmdline
-  echo >> $sysroot/etc/kernel/cmdline
-}
-
-configure_luks() {
-  mkdir -p $sysroot/etc/dracut.conf.d
-  echo "luks UUID=$(get_uuid pvroot) none discard,tpm2-device=auto" > $sysroot/etc/crypttab
-  echo 'add_dracutmodules+=" tpm2-tss lvm "' > $sysroot/etc/dracut.conf.d/tpm2.conf
-}
-
-print_fstab() {
-  echo "UUID=$(get_uuid EFISYS)    /boot/efi vfat umask=0077,shortname=winnt 0 2"
-  echo "UUID=$(get_uuid luks-root) /         ext4 defaults 1 2"
-  echo "UUID=$(get_uuid luks-home) /home     ext4 defaults 1 2"
-}
-
-configure_fstab() {
-  mkdir -p $sysroot/etc
-  print_fstab >> $sysroot/etc/fstab
+configure_dracut() {
+  local modules
+  modules=$(get_config '.dracut_modules[]' | tr '\n' ' ')
+  modules=${modules% }
+  if [[ $modules ]]; then
+    mkdir -p $sysroot/etc/dracut.conf.d
+    echo "add_dracutmodules+=\" $modules \"" > $sysroot/etc/dracut.conf.d/pflaster.conf
+  fi
 }
 
 configure_kernel_install() {
@@ -128,11 +107,8 @@ configure_kernel_install() {
   cp $installbase/install.conf $sysroot/etc/kernel/install.conf
 }
 
-configure_rootdir() {
-  cat $installbase/aliases.sh >> $sysroot/root/.bashrc
-  cp /root/.vimrc $sysroot/root
-  cp /root/.bash_profile $sysroot/root
-  cp /tmp/install/config.json $sysroot/root
+extract_late_tgz() {
+  tar --no-same-owner -xf /tmp/late.tgz --directory /
 }
 
 copy_logs() {
@@ -146,15 +122,12 @@ copy_dnf_config() {
   cp /etc/yum.repos.d/*.repo $sysroot/etc/yum.repos.d
 }
 
-chrooted_install_sdboot() {
+cleanup_boot_entries() {
   local bootnum bootnums
   bootnums=$(efibootmgr | sed -n -E 's/^Boot([A-F0-9]+)\b.*\bLinux Boot Manager\b.*$/\1/p')
   for bootnum in $bootnums; do
     efibootmgr --bootnum $bootnum --delete-bootnum || return
   done
-  mkdir -p $sysroot/root
-  cp $installbase/chrooted/install_sdboot $sysroot/root
-  chroot $sysroot /root/install_sdboot
 }
 
 install_packages() {
@@ -194,32 +167,64 @@ chrooted_postinstall() {
   chroot $sysroot /root/postinstall
 }
 
+configure_crypttab() {
+  mkdir -p $sysroot/etc
+  echo "luks UUID=$(get_uuid pvroot) none discard,tpm2-device=auto" > $sysroot/etc/crypttab
+}
+
+print_fstab() {
+  echo "UUID=$(get_uuid EFISYS)    /boot/efi vfat umask=0077,shortname=winnt 0 2"
+  echo "UUID=$(get_uuid luks-root) /         ext4 defaults 1 2"
+  echo "UUID=$(get_uuid luks-home) /home     ext4 defaults 1 2"
+}
+
+configure_fstab() {
+  mkdir -p /etc
+  print_fstab >> $sysroot/etc/fstab
+}
+
+print_cmdline_options() {
+  echo "root=UUID=$(get_uuid luks-root)"
+  echo "rd.luks.uuid=$(get_uuid pvroot)"
+  echo "rd.lvm.vg=luks"
+  echo "rd.shell"
+}
+
+configure_cmdline() {
+  mkdir -p $sysroot/etc/kernel
+  local options
+  options=$(print_cmdline_options | tr '\n' ' ')
+  echo ${options% } > $sysroot/etc/kernel/cmdline
+}
+
 do_everything() {
 
   # Preparations
-  configure_disk || return $(error "configure disk")
-  prepare_partitions || return $(error "prepare partitions")
-  mount_rootfs || return $(error "mount rootfs")
-  mount_home || return $(error "mount home")
-  mount_efisys || return $(error "mount efisys")
-  mount_misc || return $(error "mount misc")
-  dnf_setup || return $(error "dnf setup")
+  run configure_disk || return
+  run prepare_partitions || return
+  run mount_rootfs || return
+  run mount_home || return
+  run mount_efisys || return
+  run mount_misc || return
+  run dnf_setup || return
 
   # Actual installation begins here
-  install_packages || return $(error "install packages")
-  copy_common || return $(error "copy common")
-  configure_hostname || return $(error "configure hostname")
-  configure_machine_id || return $(error "configure machine id")
-  configure_cmdline || return $(error "configure cmdline")
-  configure_luks || return $(error "configure luks")
-  configure_fstab || return $(error "configure fstab")
-  configure_kernel_install || return $(error "configure kernel install")
-  configure_rootdir || return $(error "configure rootdir")
-  chrooted_install_sdboot || return $(error "chrooted install sdboot")
-  install_kernel || return $(error "install kernel")
-  chrooted_postinstall || return $(error "chrooted postinstall")
-  copy_dnf_config || return $(error "copy dnf config")
-  copy_logs || return $(error "copy logs")
+  run install_packages || return
+  run copy_common || return
+  run configure_hostname || return
+  run configure_machine_id || return
+  run configure_dracut || return
+  run configure_kernel_install || return
+  run extract_late_tgz || return
+  run cleanup_boot_entries || return
+  run_chrooted /root/install_sdboot || return
+  run configure_crypttab || return
+  run configure_fstab || return
+  run configure_cmdline || return
+  run install_kernel || return
+  run chrooted_postinstall || return
+  run copy_dnf_config || return
+  run copy_logs || return
   [[ -f /tmp/stop ]] && { echo "zZz..." ; sleep inf ; }
   reboot
 }

@@ -1,8 +1,38 @@
 installbase=/tmp/install
+sysroot=/mnt/sysroot
 
 error() {
   1>&2 echo "ERROR: $@"
   echo 1
+}
+
+run() {
+  echo "Running: $1"
+  $1 || return $(error "$1")
+  if [[ -f /tmp/pause ]]; then
+    echo "sSs..."
+    sleep inf
+    rm -f /tmp/pause
+  fi
+  echo "OK: $1"
+}
+
+run_chrooted() {
+  echo "Running: chroot $sysroot $1"
+  chroot $sysroot $1 || return $(error "chroot $sysroot $1")
+  if [[ -f /tmp/pause ]]; then
+    echo "sSs..."
+    sleep inf
+    rm -f /tmp/pause
+  fi
+  echo "OK: chroot $sysroot $1"
+}
+
+remount() {
+  if findmnt -n $sysroot/$1 &> /dev/null; then
+    return 0
+  fi
+  mount --bind -m $1 $sysroot/$1
 }
 
 has_tpm() {

@@ -36,12 +36,10 @@ sda             disk                        25.9G
 zram0           disk  swap        zram0        8G [SWAP]
 ```
 
-* Everything but the EFI partition (sda1) is encrypted.
-* When unlocked, the crypted partition (sda2) contains an lvm volume group.
+* Everything but the EFI partition is encrypted.
+* When unlocked, pvroot contains an lvm volume group.
 * You can add more lvm partitions later. For example, a second swap device.
-* The installer creates the lvm partitions with minimal default sizes. You can extend them later.
-* Currently, the installer sets a LUKS key "temppass". You may want to change this after installation.
-* If the installer finds a partition labeled "pvroot", it will prompt for the LUKS key. If pvroot can be unlocked, any "luks-home" inside will be preserved.
+* If the installer finds a partition labeled "pvroot", it will prompt for the LUKS key. If pvroot can be unlocked, any partition inside except "luks-root" will be preserved.
 
 ### How it started
 
@@ -49,9 +47,9 @@ See this thread: <https://discussion.fedoraproject.org/t/how-to-install-fedora-w
 
 ### Prepare the installation
 
-Run `make`. This should create `root.tgz`.
+Run `make`. This should create `early.tgz` and `late.tgz`.
 
-Now that you have `root.tgz`, start a server. Here's an easy way to do this:
+Now that you have these files, start a server. Here's an easy way to do this:
 
 ```
 ./serve
@@ -106,6 +104,9 @@ assuming your http server runs on `192.168.178.22`.
 ### TODO
 
 * more [config options](https://github.com/jbock-java/pflaster/blob/main/tmp/install/config.json)
-* make it possible to override the config via http
-* btrfs?
-* Stop being a kickstart script. We can do without anaconda.
+* make it possible to override the config file via http
+* select from a range of "storage modules":
+    * the default "lvm_luks" module
+    * a "lvm_plain" module
+    * maybe "btrfs" modules?
+    * maybe "bcachefs" modules?

@@ -1,4 +1,20 @@
 #!/bin/bash
 
-touch /tmp/stop
-echo "OK"
+if [[ $1 = "-c" || $1 = "--continue" ]]; then
+  pid=$(ps --no-headers $(pidof sleep) | sed -n -E 's/^\s*\b([0-9]+)\b.*\bsleep inf$/\1/p' | tr '\n' ' ')
+  if [[ $pid ]]; then
+    pid=${pid%% *}
+    kill $pid
+    echo "OK, killed $pid"
+  else
+    echo "[ERROR] no such process"
+  fi
+elif [[ $1 = "-p" || $1 = "--pause" ]]; then
+  touch /tmp/pause
+  echo "OK, /tmp/pause created. Installer will halt after the current step."
+elif [[ -z $1 ]]; then
+  touch /tmp/stop
+  echo "OK, /tmp/stop created. Installer will halt at the end."
+else
+  echo "[ERROR] Unknown token: $1"
+fi

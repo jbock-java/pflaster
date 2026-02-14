@@ -67,18 +67,18 @@ configure_sdboot() {
 configure_tpm_unlocking() {
   has_tpm || return 0
   local device=$(blkid --label pvroot)
-  echo -n temppass > /tmp/temppass
+  get_config .lukskey | tr -d '\n' > /tmp/temppass
   chmod 600 /tmp/temppass
   systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "" --unlock-key-file /tmp/temppass $device || return 1
   dracut --quiet -f --kver $(uname -r)
 }
 
 do_postinstall() {
-  create_users || return $(error "create users")
-  set_root_pw || return $(error "set root pw")
-  configure_sudoers || return $(error "configure sudoers")
-  configure_sdboot || return $(error "configure sudoers")
-  configure_tpm_unlocking
+  run create_users || return
+  run set_root_pw || return
+  run configure_sudoers || return
+  run configure_sdboot || return
+  run configure_tpm_unlocking || return
 }
 
 return 2> /dev/null || {
