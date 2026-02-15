@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# This runs chrooted.
+# Preinstall means right before ""kernel"" install.
 
 [[ -v installbase ]] || source /tmp/install/common.sh
 
@@ -8,9 +11,9 @@ configure_crypttab() {
 }
 
 print_fstab() {
-  echo "UUID=$(get_uuid EFISYS)    /boot/efi vfat umask=0077,shortname=winnt 0 2"
-  echo "UUID=$(get_uuid luks-root) /         ext4 defaults 1 2"
-  echo "UUID=$(get_uuid luks-home) /home     ext4 defaults 1 2"
+  echo "UUID=$(get_uuid $(get_label efi))  /boot/efi vfat umask=0077,shortname=winnt 0 2"
+  echo "UUID=$(get_uuid $(get_label root)) /         ext4 defaults 1 2"
+  echo "UUID=$(get_uuid $(get_label home)) /home     ext4 defaults 1 2"
 }
 
 configure_fstab() {
@@ -19,7 +22,7 @@ configure_fstab() {
 }
 
 print_cmdline_options() {
-  echo "root=UUID=$(get_uuid luks-root)"
+  echo "root=UUID=$(get_uuid $(get_label root))"
   echo "rd.luks.uuid=$(get_uuid pvroot)"
   echo "rd.lvm.vg=luks"
   echo "rd.shell"

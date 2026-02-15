@@ -97,6 +97,10 @@ has_modifier() {
   jq -M -r '.modifiers[]' "$installbase/config.json" | grep -q "^$1$"
 }
 
+get_label() {
+  get_profile_config ".partition.$1.label"
+}
+
 configure_disk() {
   [[ -f $installbase/disk ]] && return 0
   local path disks REPLY lsblk_printed=false

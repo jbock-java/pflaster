@@ -1,9 +1,11 @@
 #!/bin/bash
+#
+# This runs chrooted, after kernel install.
 
 [[ -v installbase ]] || source /tmp/install/common.sh
 
 get_users() {
-  jq -r '.users | keys[]' "$installbase/config.json"
+  jq -r '.user | keys[]' "$installbase/config.json"
 }
 
 create_user() {
@@ -12,11 +14,11 @@ create_user() {
     user_exists=1
   fi
   if [[ $user_exists ]]; then
-    useradd -m -U -p "$(get_config .users.$user.password)" "$user"
+    useradd -m -U -p "$(get_config .user.$user.password)" "$user"
   else
-    useradd -U -p "$(get_config .users.$user.password)" "$user"
+    useradd -U -p "$(get_config .user.$user.password)" "$user"
   fi
-  if [[ $(get_config .users.$user.admin) = "true" ]]; then
+  if [[ $(get_config .user.$user.admin) = "true" ]]; then
     usermod -a -G wheel "$user"
   fi
   if [[ $user_exists ]]; then
@@ -24,7 +26,7 @@ create_user() {
     return 0
   fi
   local sshkey
-  sshkey="$(get_config .users.$user.sshkey)"
+  sshkey="$(get_config .user.$user.sshkey)"
   if [[ ${sshkey:-null} != "null" ]]; then
     mkdir -p /home/$user/.ssh
     chmod 700 /home/$user/.ssh
@@ -67,7 +69,7 @@ configure_sdboot() {
 configure_tpm_unlocking() {
   has_tpm || return 0
   local device=$(blkid --label pvroot)
-  get_config .lukskey | tr -d '\n' > /tmp/temppass
+  get_profile_config .lukskey | tr -d '\n' > /tmp/temppass
   chmod 600 /tmp/temppass
   systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "" --unlock-key-file /tmp/temppass $device || return 1
   dracut --quiet -f --kver $(uname -r)

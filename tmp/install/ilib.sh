@@ -64,19 +64,19 @@ dnf_group_install_rootfs() {
 
 mount_rootfs() {
   local device
-  device=$(blkid --label luks-root)
+  device=$(blkid --label $(get_label root)) || return
   mount -m $device $sysroot
 }
 
 mount_home() {
   local device
-  device=$(blkid --label luks-home)
+  device=$(blkid --label $(get_label home)) || return
   mount -m $device $sysroot/home
 }
 
 mount_efisys() {
   local device
-  device=$(blkid --label EFISYS) || return
+  device=$(blkid --label $(get_label efi)) || return
   mount --mkdir=0700 -o fmask=0077 -o dmask=0077 -o shortname=winnt $device $sysroot/boot/efi
 }
 
@@ -174,7 +174,7 @@ do_everything() {
   # Preparations
   echo "Type 'C-b c stop' to halt at the end, or 'C-b c stop --now' to halt earlier."
   run configure_disk || return
-  run prepare_partitions || return
+  run $installbase/profile/$(get_profile)/storage || return
   run mount_rootfs || return
   run mount_home || return
   run mount_efisys || return

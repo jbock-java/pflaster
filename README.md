@@ -20,9 +20,9 @@
 * Anaconda is used, but only as an entry point. In kickstart terms: the entire installation happens in "%pre".
 * The installer is written in bash.
 
-### Partitioning
+### Default profile
 
-This is the current partitioning:
+The default "lvm\_luks" profile creates these partitions:
 
 ```
 [core@box ~]$ lsblk -i -o NAME,TYPE,FSTYPE,LABEL,SIZE,MOUNTPOINTS
@@ -36,10 +36,10 @@ sda             disk                        25.9G
 zram0           disk  swap        zram0        8G [SWAP]
 ```
 
-* Everything but the EFI partition is encrypted.
-* When unlocked, pvroot contains an lvm volume group.
-* You can add more lvm partitions later. For example, a second swap device.
-* If the installer finds a partition labeled "pvroot", it will prompt for the LUKS key. If pvroot can be unlocked, any partition inside except "luks-root" will be preserved.
+* Before luks unlocking, there is only EFISYS and an encrypted partition "pvroot".
+* After luks unlocking, "pvroot" contains an lvm volume group.
+* It's lvm, so you can resize or add partitions later. For example, a second swap device.
+* Reinstall-behaviour: If the installer sees a label "pvroot", it will ask for the LUKS key. If unlocking succeeds, any partition inside except "luks-root" will be preserved.
 
 ### How it started
 
@@ -104,9 +104,8 @@ assuming your http server runs on `192.168.178.22`.
 ### TODO
 
 * more [config options](https://github.com/jbock-java/pflaster/blob/main/tmp/install/config.json)
-* make it possible to override the config file via http
-* select from a range of "installation profiles":
-    * the default "lvm_luks" profile
-    * a "lvm_plain" profile
-    * maybe "btrfs" profile?
-    * maybe "bcachefs" profile?
+* allow overriding the config
+* ask for profile if not configured
+* add "lvm\_plain" profile
+* maybe "btrfs" profile?
+* maybe "bcachefs" profile?
