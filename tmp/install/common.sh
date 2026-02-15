@@ -1,6 +1,22 @@
 installbase=/tmp/install
 sysroot=/mnt/sysroot
 
+getarg() {
+  local token arg="$1" len=${#1}
+  shift
+  set -- $(< /proc/cmdline)
+  for token in "$@"; do
+    if [[ $token = "$arg" ]]; then
+      echo "1"
+      return 0
+    elif [[ ${token:0:$(( len + 1))} = "$arg=" ]]; then
+      echo "${token:$(( len + 1 ))}"
+      return 0
+    fi
+  done
+  return 1
+}
+
 error() {
   1>&2 echo "ERROR: $@"
   echo 1
@@ -10,7 +26,7 @@ run() {
   echo "Running: $1"
   $1 || return $(error "$1")
   if [[ -f /tmp/pause ]]; then
-    echo "sSs..."
+    echo "Halted. 'stop -c' to continue."
     sleep inf
     rm -f /tmp/pause
   fi
@@ -21,11 +37,20 @@ run_chrooted() {
   echo "Running: chroot $sysroot $1"
   chroot $sysroot $1 || return $(error "chroot $sysroot $1")
   if [[ -f /tmp/pause ]]; then
-    echo "sSs..."
+    echo "Halted. 'stop -c' to continue."
     sleep inf
     rm -f /tmp/pause
   fi
   echo "OK: chroot $sysroot $1"
+}
+
+get_profile() {
+  local profile
+  if profile=$(getarg pf.profile); then
+    echo $profile
+  else
+    echo "lvm_luks"
+  fi
 }
 
 remount() {
@@ -62,6 +87,10 @@ get_config() {
   if [[ $result != "null" ]]; then
     echo $result
   fi
+}
+
+get_profile_config() {
+  get_config ".profile.$(get_profile)$1"
 }
 
 has_modifier() {

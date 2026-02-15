@@ -105,8 +105,8 @@ assuming your http server runs on `192.168.178.22`.
 
 * more [config options](https://github.com/jbock-java/pflaster/blob/main/tmp/install/config.json)
 * make it possible to override the config file via http
-* select from a range of "storage modules":
-    * the default "lvm_luks" module
-    * a "lvm_plain" module
-    * maybe "btrfs" modules?
-    * maybe "bcachefs" modules?
+* select from a range of "installation profiles":
+    * the default "lvm_luks" profile
+    * a "lvm_plain" profile
+    * maybe "btrfs" profile?
+    * maybe "bcachefs" profile?

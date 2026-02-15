@@ -4,10 +4,14 @@
   "lukskey": "temppass",
   "modifiers": [
   ],
-  "dracut_modules": [
-    "tpm2-tss",
-    "lvm"
-  ],
+  "profile": {
+    "lvm_luks": {
+      "dracut_modules": [
+        "tpm2-tss",
+        "lvm"
+      ]
+    }
+  },
   "users": {
     "core": {
       "admin": true,

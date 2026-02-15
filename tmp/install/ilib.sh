@@ -94,17 +94,12 @@ configure_machine_id() {
 
 configure_dracut() {
   local modules
-  modules=$(get_config '.dracut_modules[]' | tr '\n' ' ')
+  modules=$(get_profile_config '.dracut_modules[]' | tr '\n' ' ')
   modules=${modules% }
   if [[ $modules ]]; then
     mkdir -p $sysroot/etc/dracut.conf.d
     echo "add_dracutmodules+=\" $modules \"" > $sysroot/etc/dracut.conf.d/pflaster.conf
   fi
-}
-
-configure_kernel_install() {
-  mkdir -p $sysroot/etc/kernel
-  cp $installbase/install.conf $sysroot/etc/kernel/install.conf
 }
 
 extract_late_tgz() {
@@ -157,6 +152,13 @@ copy_common() {
   cp $installbase/config.json $sysroot/$installbase
 }
 
+copy_profile() {
+  mkdir -p $sysroot/$installbase
+  local profile=$(get_profile)
+  cp $installbase/profile/$profile/preinstall $sysroot/$installbase || return 1
+  cp $installbase/profile/$profile/postinstall $sysroot/$installbase
+}
+
 install_kernel() {
   dnf_install_rootfs kernel-modules-core-$(uname -r)
 }
@@ -167,39 +169,10 @@ chrooted_postinstall() {
   chroot $sysroot /root/postinstall
 }
 
-configure_crypttab() {
-  mkdir -p $sysroot/etc
-  echo "luks UUID=$(get_uuid pvroot) none discard,tpm2-device=auto" > $sysroot/etc/crypttab
-}
-
-print_fstab() {
-  echo "UUID=$(get_uuid EFISYS)    /boot/efi vfat umask=0077,shortname=winnt 0 2"
-  echo "UUID=$(get_uuid luks-root) /         ext4 defaults 1 2"
-  echo "UUID=$(get_uuid luks-home) /home     ext4 defaults 1 2"
-}
-
-configure_fstab() {
-  mkdir -p /etc
-  print_fstab >> $sysroot/etc/fstab
-}
-
-print_cmdline_options() {
-  echo "root=UUID=$(get_uuid luks-root)"
-  echo "rd.luks.uuid=$(get_uuid pvroot)"
-  echo "rd.lvm.vg=luks"
-  echo "rd.shell"
-}
-
-configure_cmdline() {
-  mkdir -p $sysroot/etc/kernel
-  local options
-  options=$(print_cmdline_options | tr '\n' ' ')
-  echo ${options% } > $sysroot/etc/kernel/cmdline
-}
-
 do_everything() {
 
   # Preparations
+  echo "Type 'C-b c stop' to halt at the end, or 'C-b c stop --now' to halt earlier."
   run configure_disk || return
   run prepare_partitions || return
   run mount_rootfs || return
@@ -211,20 +184,18 @@ do_everything() {
   # Actual installation begins here
   run install_packages || return
   run copy_common || return
+  run copy_profile || return
   run configure_hostname || return
   run configure_machine_id || return
   run configure_dracut || return
-  run configure_kernel_install || return
   run extract_late_tgz || return
   run cleanup_boot_entries || return
-  run_chrooted /root/install_sdboot || return
-  run configure_crypttab || return
-  run configure_fstab || return
-  run configure_cmdline || return
+  run_chrooted $installbase/install_sdboot || return
+  run_chrooted $installbase/preinstall || return
   run install_kernel || return
-  run chrooted_postinstall || return
+  run_chrooted $installbase/postinstall || return
   run copy_dnf_config || return
   run copy_logs || return
-  [[ -f /tmp/stop ]] && { echo "zZz..." ; sleep inf ; }
+  [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
   reboot
 }

@@ -1,5 +1,13 @@
 #!/bin/bash
 
+print_usage() {
+  cat <<"EOF"
+Switch back to the installation pane with 'C-b l'.
+Press 'C-b l' again to come back here.
+When installation is halted, type 'stop -c' to continue.
+EOF
+}
+
 if [[ $1 = "-c" || $1 = "--continue" ]]; then
   pid=$(ps --no-headers $(pidof sleep) | sed -n -E 's/^\s*\b([0-9]+)\b.*\bsleep inf$/\1/p' | tr '\n' ' ')
   if [[ $pid ]]; then
@@ -9,12 +17,15 @@ if [[ $1 = "-c" || $1 = "--continue" ]]; then
   else
     echo "[ERROR] no such process"
   fi
-elif [[ $1 = "-p" || $1 = "--pause" ]]; then
+elif [[ $1 = "--now" ]]; then
   touch /tmp/pause
-  echo "OK, /tmp/pause created. Installer will halt after the current step."
+  touch /tmp/stop
+  echo "Installer will halt at the end, and after the current step."
+  print_usage
 elif [[ -z $1 ]]; then
   touch /tmp/stop
-  echo "OK, /tmp/stop created. Installer will halt at the end."
+  echo "Installer will halt at the end."
+  print_usage
 else
   echo "[ERROR] Unknown token: $1"
 fi
