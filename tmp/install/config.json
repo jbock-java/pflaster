@@ -3,6 +3,7 @@
   "hostname": "box",
   "modifiers": [
   ],
+  "copy_repos": false,
   "profile": {
     "lvm_luks": {
       "lukskey": "temppass",
@@ -43,6 +44,7 @@
     "selinux-policy",
     "jq",
     "ntpsec",
+    "fedora-repos",
     "lvm2"
   ],
   "comments": [

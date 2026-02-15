@@ -3,25 +3,13 @@
 source $installbase/partlib.sh
 
 dnf_configure_repos() {
-  mkdir -p $sysroot/etc/yum.repos.d
-  for repo in /etc/yum.repos.d/*.repo; do
-    if [[ $repo =~ .*/fedora\.repo ]]; then
-      sed -i -E \
-        -e 's/^(\[.*\])$/\1\nsslverify=0/' \
-        -e "s|^countme=.*|countme=0|" \
-        -e "s|^enabled=.*|enabled=1|" \
-        $repo
-    elif [[ $repo =~ .*/fedora-updates\.repo ]]; then
-      sed -i -E \
-        -e 's/^(\[.*\])$/\1\nsslverify=0/' \
-        -e "s|^countme=.*|countme=0|" \
-        -e "s|^enabled=.*|enabled=1|" \
-        $repo
-    else
-      sed -i -E "s|^enabled=.*|enabled=0|" $repo
-    fi
-    cp $repo $sysroot/$repo
-  done
+  local script=$installbase/profile/$(get_profile)/dnf_config
+  [[ -f $script ]] || return 0
+  $script || return
+  if [[ $(get_config .copy_repos) = "true" ]]; then
+    mkdir -p $sysroot/etc/yum.repos.d
+    cp /etc/yum.repos.d/*.repo $sysroot/etc/yum.repos.d
+  fi
 }
 
 mount_misc() {

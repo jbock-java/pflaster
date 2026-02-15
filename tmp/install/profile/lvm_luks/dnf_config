@@ -1,0 +1,13 @@
+#!/bin/bash
+
+dnf_config() {
+  for repo in /etc/yum.repos.d/*.repo; do
+    sed -i -E \
+      -e "s|^countme=.*|countme=0|" \
+      $repo
+  done
+}
+
+return 2> /dev/null || {
+  dnf_config
+}
