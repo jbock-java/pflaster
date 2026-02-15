@@ -104,7 +104,6 @@ assuming your http server runs on `192.168.178.22`.
 ### TODO
 
 * more [config options](https://github.com/jbock-java/pflaster/blob/main/tmp/install/config.json)
-* allow overriding the config
 * ask for profile if not configured
 * add "lvm\_plain" profile
 * maybe "btrfs" profile?

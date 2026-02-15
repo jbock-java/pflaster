@@ -34,6 +34,7 @@ run() {
 }
 
 run_chrooted() {
+  [[ -f $sysroot$installbase/profile.txt ]] || return 1
   echo "Running: chroot $sysroot $1"
   chroot $sysroot $1 || return $(error "chroot $sysroot $1")
   if [[ -f /tmp/pause ]]; then
@@ -44,13 +45,54 @@ run_chrooted() {
   echo "OK: chroot $sysroot $1"
 }
 
-get_profile() {
-  local profile
+configure_profile() {
+  local REPLY profile profiles=()
   if profile=$(getarg pf.profile); then
-    echo $profile
-  else
-    echo "lvm_luks"
+    echo $profile > $installbase/profile.txt
+    return 0
   fi
+  for profile in $(jq -r '.profile | keys[]' "$installbase/config.json"); do
+    profiles+=($profile)
+  done
+  case ${#profiles[@]} in
+    0)
+      error "no profiles"
+      return 1
+      ;;
+    1)
+      echo ${profiles[@]} > $installbase/profile.txt
+      return 0
+      ;;
+    *)
+      local width=0
+      for profile in ${profiles[@]}; do
+        width=$(( width > ${#profile} ? width : ${#profile} ))
+      done
+      while true; do
+        echo "Available profiles:"
+        for profile in ${profiles[@]}; do
+          printf "  %-$((width))s - %s\n" $profile "$(get_config .profile.$profile.slogan)"
+        done
+        read -rp "Choose profile (default=${profiles[0]}): "
+        if [[ -z $REPLY ]]; then
+          echo ${profiles[0]} > $installbase/profile.txt
+          return 0
+        fi
+        for profile in ${profiles[@]}; do
+          if [[ $profile = "$REPLY" ]]; then
+            echo $profile > $installbase/profile.txt
+            return 0
+          fi
+        done
+        echo "No such profile: $REPLY"
+      done
+      ;;
+  esac
+}
+
+get_profile() {
+  [[ -f $installbase/profile.txt ]] || return $(error "profile not configured")
+  cat $installbase/profile.txt
 }
 
 remount() {

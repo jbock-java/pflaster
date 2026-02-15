@@ -38,40 +38,33 @@ print_parted_commands() {
   (( pos += pvrootsize ))
 }
 
-gen_new_lukskey() {
+ask_new_lukskey() {
   local reply0 reply1
   read -rsp "Choose lukskey: " reply0
   echo
-  [[ -n $reply0 ]] || return 1
+  (( ${#reply0} >= 8 )) || return $(error "minimum 8 characters")
+  [[ $reply0 = "${reply0// /}" ]] || return $(error "spaces not allowed")
   read -rsp "Confirm lukskey: " reply1
   echo
-  [[ $reply0 = "$reply1" ]] || return 1
+  [[ $reply0 = "$reply1" ]] || return $(error "confirmation failed")
   echo -n "$reply0" > $installbase/lukskey
+  chmod 600 $installbase/lukskey
 }
 
 create_partitions() {
-  local disk part pvroot luksroot lukskey rootsize homesize label_home label_root label_efi
+  local disk part pvroot luksroot rootsize homesize label_home label_root label_efi
   label_home=$(get_label home) || return
   label_root=$(get_label root) || return
   label_efi=$(get_label efi) || return
   [[ $label_home = luks-* ]] || return $(error "invalid label: home")
   [[ $label_root = luks-* ]] || return $(error "invalid label: root")
-  lukskey=$(get_profile_config .lukskey)
-  if [[ $lukskey ]]; then
-    echo -n "$lukskey" > $installbase/lukskey
-  else
-    if has_modifier "noask"; then
-      return $(error "in noask mode, lukskey must be configured")
-    fi
-    while true; do
-      gen_new_lukskey && break
-    done
-  fi
+  while true; do
+    ask_new_lukskey && break
+  done
   disk=$(get_disk) || return $(error "get_disk")
   parted --script --align optimal $disk -- $(print_parted_commands) || return 
   mkfs.vfat -n $label_efi -F 32 $(by_partlabel EFISYS) || return
   pvroot=$(by_partlabel pvroot)
-  chmod 600 $installbase/lukskey
   cryptsetup luksFormat --force-password --batch-mode $pvroot $installbase/lukskey || return
   cryptsetup luksOpen --batch-mode --key-file=$installbase/lukskey $pvroot luks || return
   cryptsetup config $pvroot --label pvroot || return
@@ -86,22 +79,13 @@ create_partitions() {
   mkfs.ext4 -q -L $label_home /dev/mapper/$label_home <<< y || return
 }
 
-get_existing_lukskey() {
+ask_existing_lukskey() {
   local REPLY pvroot
   pvroot=$(blkid --label pvroot 2> /dev/null) || return 1
   echo "Found pvroot: $pvroot"
-  if has_modifier "noask"; then
-    REPLY=$(get_profile_config .lukskey)
-    if [[ -z $REPLY ]]; then
-      return $(error "in noask mode, lukskey must be configured")
-    fi
-  else
-    read -rsp "Enter lukskey, or leave empty to wipe: "
-    echo
-  fi
-  if [[ -z $REPLY ]]; then
-    return 125
-  fi
+  read -rsp "Enter lukskey, or leave empty to wipe: "
+  echo
+  [[ -z $REPLY ]] && return 125
   echo -n "$REPLY" > $installbase/lukskey
   chmod 600 $installbase/lukskey
   cryptsetup luksOpen -q --disable-external-tokens --key-file $installbase/lukskey --test-passphrase $pvroot
@@ -128,9 +112,11 @@ unlock_pvroot() {
 prepare_partitions() {
   if ! has_modifier "always-wipe" && blkid --label pvroot &> /dev/null; then
     while true; do
-      get_existing_lukskey
+      ask_existing_lukskey
       case $? in
-        125) break ;;
+        125)
+          break
+          ;;
         0)
           unlock_pvroot
           return
@@ -138,14 +124,12 @@ prepare_partitions() {
       esac
     done
   fi
-  if ! has_modifier "noask"; then
-    local REPLY
-    while true; do
-      read -rp "Erase all data on $(get_disk)? [y/N] "
-      [[ $REPLY =~ [yY] ]] && break
-      [[ $REPLY =~ [nN] ]] && { echo "I sleep." ; sleep inf ; }
-    done
-  fi
+  local REPLY
+  while true; do
+    read -rp "Erase all data on $(get_disk)? [y/N] "
+    [[ $REPLY =~ [yY] ]] && break
+    [[ $REPLY =~ [nN] ]] && { echo "I sleep." ; sleep inf ; }
+  done
   create_partitions
 }
 

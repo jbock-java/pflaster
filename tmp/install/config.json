@@ -6,7 +6,7 @@
   "copy_repos": false,
   "profile": {
     "lvm_luks": {
-      "lukskey": "temppass",
+      "slogan": "Logical volumes in a LUKS container.",
       "partition": {
         "efi": {
           "label": "EFISYS",
@@ -25,6 +25,9 @@
         "tpm2-tss",
         "lvm"
       ]
+    },
+    "lvm_plain": {
+      "slogan": "Basic LVM + ext4 setup. No encryption."
     }
   },
   "user": {
@@ -50,7 +53,6 @@
   "comments": [
     "Json does not have comments yet, so we put them here.",
     "Possible modifiers:",
-    "    noask         # Never ask any questions, fail if something is missing.",
     "    always-wipe   # DANGEROUS: Ignore any existing partitions, always wipe the whole disk."
   ]
 }

@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# A profile may or may not have this file.
+# If it exists, it runs unchrooted,
+# between "sysroot" mount and kernel install.
+
+[[ -v installbase ]] || source /tmp/install/common.sh
+
+copy_lukskey() {
+  [[ -f $installbase/lukskey ]] || return 1
+  mkdir -p $sysroot$installbase
+  cp $installbase/lukskey $sysroot$installbase
+}
+
+postmount() {
+  copy_lukskey
+}
+
+return 2> /dev/null || {
+  postmount
+}

@@ -20,6 +20,12 @@ mount_misc() {
   remount /dev || return
 }
 
+postmount() {
+  local script=$installbase/profile/$(get_profile)/postmount
+  [[ -f script ]] || return 0
+  $script
+}
+
 dnf_setup() {
   [[ -e /etc/yum.repos.d ]] && return 0
   ln -s /etc/anaconda.repos.d /etc/yum.repos.d
@@ -95,7 +101,7 @@ extract_late_tgz() {
 }
 
 copy_logs() {
-  [[ -f $installbase/pflaster.log ]] || return 1
+  [[ -f $installbase/pflaster.log ]] || return
   mkdir -p $sysroot/var/log/pflaster
   cp $installbase/pflaster.log $sysroot/var/log/pflaster
 }
@@ -135,16 +141,17 @@ install_packages() {
 }
 
 copy_common() {
-  mkdir -p $sysroot/$installbase
-  cp $installbase/common.sh $sysroot/$installbase || return 1
-  cp $installbase/config.json $sysroot/$installbase
+  mkdir -p $sysroot$installbase
+  cp $installbase/common.sh $sysroot$installbase || return
+  cp $installbase/config.json $sysroot$installbase
 }
 
 copy_profile() {
-  mkdir -p $sysroot/$installbase
+  mkdir -p $sysroot$installbase
   local profile=$(get_profile)
-  cp $installbase/profile/$profile/preinstall $sysroot/$installbase || return 1
-  cp $installbase/profile/$profile/postinstall $sysroot/$installbase
+  cp $installbase/profile/$profile/preinstall $sysroot$installbase || return
+  cp $installbase/profile/$profile/postinstall $sysroot$installbase || return
+  cp $installbase/profile.txt $sysroot$installbase
 }
 
 install_kernel() {
@@ -162,12 +169,15 @@ do_everything() {
   # Preparations
   echo "Type 'C-b c stop' to halt at the end, or 'C-b c stop --now' to halt earlier."
   run configure_disk || return
+  run configure_profile || return
   run $installbase/profile/$(get_profile)/storage || return
   run mount_rootfs || return
   run mount_home || return
   run mount_efisys || return
   run mount_misc || return
+  run cleanup_boot_entries || return
   run dnf_setup || return
+  run postmount || return
 
   # Actual installation begins here
   run install_packages || return
@@ -177,7 +187,6 @@ do_everything() {
   run configure_machine_id || return
   run configure_dracut || return
   run extract_late_tgz || return
-  run cleanup_boot_entries || return
   run_chrooted $installbase/install_sdboot || return
   run_chrooted $installbase/preinstall || return
   run install_kernel || return
