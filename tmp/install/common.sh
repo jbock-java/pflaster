@@ -49,6 +49,7 @@ configure_profile() {
   local REPLY profile profiles=()
   if profile=$(getarg pf.profile); then
     echo $profile > $installbase/profile.txt
+    echo "Profile selected: $profile"
     return 0
   fi
   for profile in $(jq -r '.profile | keys[]' "$installbase/config.json"); do

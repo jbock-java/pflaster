@@ -26,7 +26,7 @@ get_only_child() {
 print_parted_commands() {
   local disksize efizsize
   disksize=$(get_disksize)
-  efisize=$(get_profile_config .partition.efi.defaultsize)
+  efisize=$(get_config .profile.lvm_luks.partition.efi.defaultsize)
   efisize=${efisize:-2044}
   local pvrootsize=$(( disksize - efisize - 32 ))
   local pos=4
@@ -53,9 +53,9 @@ ask_new_lukskey() {
 
 create_partitions() {
   local disk part pvroot luksroot rootsize homesize label_home label_root label_efi
-  label_home=$(get_label home) || return
-  label_root=$(get_label root) || return
-  label_efi=$(get_label efi) || return
+  label_home=$(get_config .profile.lvm_luks.partition.home.label) || return
+  label_root=$(get_config .profile.lvm_luks.partition.root.label) || return
+  label_efi=$(get_config .profile.lvm_luks.partition.efi.label) || return
   [[ $label_home = luks-* ]] || return $(error "invalid label: home")
   [[ $label_root = luks-* ]] || return $(error "invalid label: root")
   while true; do
@@ -71,8 +71,8 @@ create_partitions() {
   luksroot=$(get_only_child $pvroot) || return
   pvcreate $luksroot || return
   vgcreate luks $luksroot || return
-  rootsize=$(get_profile_config .partition.root.defaultsize)
-  homesize=$(get_profile_config .partition.home.defaultsize)
+  rootsize=$(get_config .profile.lvm_luks.partition.root.defaultsize)
+  homesize=$(get_config .profile.lvm_luks.partition.home.defaultsize)
   lvcreate -L ${rootsize:-8192}M -n ${label_root#luks-} luks || return
   lvcreate -L ${homesize:-2048}M -n ${label_home#luks-} luks || return
   mkfs.ext4 -q -L $label_root /dev/mapper/$label_root <<< y || return
@@ -94,9 +94,9 @@ ask_existing_lukskey() {
 unlock_pvroot() {
   [[ -f $installbase/lukskey ]] || return 1
   local pvroot luks_root efisys label_home label_root label_efi
-  label_home=$(get_label home) || return
-  label_root=$(get_label root) || return
-  label_efi=$(get_label efi) || return
+  label_home=$(get_config .profile.lvm_luks.partition.home.label) || return
+  label_root=$(get_config .profile.lvm_luks.partition.root.label) || return
+  label_efi=$(get_config .profile.lvm_luks.partition.efi.label) || return
   [[ $label_home = luks-* ]] || return $(error "invalid label: home")
   [[ $label_root = luks-* ]] || return $(error "invalid label: root")
   efisys=$(blkid --label $label_efi) || return

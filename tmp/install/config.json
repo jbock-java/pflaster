@@ -27,7 +27,24 @@
       ]
     },
     "lvm_plain": {
-      "slogan": "Basic LVM + ext4 setup. No encryption."
+      "slogan": "Basic LVM + ext4 setup. No encryption.",
+      "partition": {
+        "efi": {
+          "label": "EFISYS",
+          "defaultsize": 2044
+        },
+        "root": {
+          "label": "linux-root",
+          "defaultsize": 8192
+        },
+        "home": {
+          "label": "linux-home",
+          "defaultsize": 2048
+        }
+      },
+      "dracut_modules": [
+        "lvm"
+      ]
     }
   },
   "user": {

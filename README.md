@@ -105,6 +105,5 @@ assuming your http server runs on `192.168.178.22`.
 
 * more [config options](https://github.com/jbock-java/pflaster/blob/main/tmp/install/config.json)
 * ask for profile if not configured
-* add "lvm\_plain" profile
-* maybe "btrfs" profile?
-* maybe "bcachefs" profile?
+* add "btrfs" profile
+* add "bcachefs" profile

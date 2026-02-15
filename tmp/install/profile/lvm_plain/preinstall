@@ -5,16 +5,11 @@
 
 [[ -v installbase ]] || source /tmp/install/common.sh
 
-configure_crypttab() {
-  mkdir -p /etc
-  echo "luks UUID=$(get_uuid pvroot) none discard,tpm2-device=auto" > /etc/crypttab
-}
-
 print_fstab() {
   local label_home label_root label_efi
-  label_home=$(get_config .profile.lvm_luks.partition.home.label)
-  label_root=$(get_config .profile.lvm_luks.partition.root.label)
-  label_efi=$(get_config .profile.lvm_luks.partition.efi.label)
+  label_home=$(get_config .profile.lvm_plain.partition.home.label)
+  label_root=$(get_config .profile.lvm_plain.partition.root.label)
+  label_efi=$(get_config .profile.lvm_plain.partition.efi.label)
   echo "UUID=$(get_uuid $label_efi)  /boot/efi vfat umask=0077,shortname=winnt 0 2"
   echo "UUID=$(get_uuid $label_root) /         ext4 defaults 1 2"
   echo "UUID=$(get_uuid $label_home) /home     ext4 defaults 1 2"
@@ -27,10 +22,9 @@ configure_fstab() {
 
 print_cmdline_options() {
   local label_root
-  label_root=$(get_config .profile.lvm_luks.partition.root.label)
+  label_root=$(get_config .profile.lvm_plain.partition.root.label)
   echo "root=UUID=$(get_uuid $label_root)"
-  echo "rd.luks.uuid=$(get_uuid pvroot)"
-  echo "rd.lvm.vg=luks"
+  echo "rd.lvm.vg=linux"
   echo "rd.shell"
 }
 
@@ -41,7 +35,6 @@ configure_cmdline() {
 }
 
 do_prepare() {
-  run configure_crypttab || return
   run configure_fstab || return
   run configure_cmdline || return
 }
