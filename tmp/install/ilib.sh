@@ -152,7 +152,6 @@ copy_profile() {
   cp $installbase/profile/$profile/preinstall $sysroot$installbase || return
   cp $installbase/profile/$profile/postinstall $sysroot$installbase || return
   cp $installbase/profile.txt $sysroot$installbase
-  [[ -f $installbase/lukskey ]] && cp $installbase/lukskey $sysroot$installbase
 }
 
 install_kernel() {
