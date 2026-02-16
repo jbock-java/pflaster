@@ -1,8 +1,0 @@
-#!/bin/bash
-
-set_root_pw() {
-}
-
-return 2> /dev/null || {
-  set_root_pw
-}

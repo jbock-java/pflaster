@@ -56,8 +56,8 @@ create_partitions() {
   label_home=$(get_config .profile.lvm_luks.partition.home.label) || return
   label_root=$(get_config .profile.lvm_luks.partition.root.label) || return
   label_efi=$(get_config .profile.lvm_luks.partition.efi.label) || return
-  [[ $label_home = luks-* ]] || return $(error "invalid label: home")
-  [[ $label_root = luks-* ]] || return $(error "invalid label: root")
+  [[ $label_home = luks-* ]] || return $(error "invalid label: $label_home")
+  [[ $label_root = luks-* ]] || return $(error "invalid label: $label_root")
   while true; do
     ask_new_lukskey && break
   done
@@ -97,8 +97,8 @@ unlock_pvroot() {
   label_home=$(get_config .profile.lvm_luks.partition.home.label) || return
   label_root=$(get_config .profile.lvm_luks.partition.root.label) || return
   label_efi=$(get_config .profile.lvm_luks.partition.efi.label) || return
-  [[ $label_home = luks-* ]] || return $(error "invalid label: home")
-  [[ $label_root = luks-* ]] || return $(error "invalid label: root")
+  [[ $label_home = luks-* ]] || return $(error "invalid label: $label_home")
+  [[ $label_root = luks-* ]] || return $(error "invalid label: $label_root")
   efisys=$(blkid --label $label_efi) || return
   pvroot=$(blkid --label pvroot 2> /dev/null) || return
   cryptsetup luksOpen -q --disable-external-tokens --key-file $installbase/lukskey $pvroot luks || return

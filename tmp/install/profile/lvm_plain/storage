@@ -43,8 +43,8 @@ create_partitions() {
   label_home=$(get_config .profile.lvm_plain.partition.home.label) || return
   label_root=$(get_config .profile.lvm_plain.partition.root.label) || return
   label_efi=$(get_config .profile.lvm_plain.partition.efi.label) || return
-  [[ $label_home = linux-* ]] || return $(error "invalid label: home")
-  [[ $label_root = linux-* ]] || return $(error "invalid label: root")
+  [[ $label_home = linux-* ]] || return $(error "invalid label: $label_home")
+  [[ $label_root = linux-* ]] || return $(error "invalid label: $label_root")
   disk=$(get_disk) || return $(error "get_disk")
   parted --script --align optimal $disk -- $(print_parted_commands) || return 
   mkfs.vfat -n $label_efi -F 32 $(by_partlabel EFISYS) || return
@@ -65,8 +65,8 @@ format_root() {
   label_home=$(get_config .profile.lvm_plain.partition.home.label) || return
   label_root=$(get_config .profile.lvm_plain.partition.root.label) || return
   label_efi=$(get_config .profile.lvm_plain.partition.efi.label) || return
-  [[ $label_home = linux-* ]] || return $(error "invalid label: home")
-  [[ $label_root = linux-* ]] || return $(error "invalid label: root")
+  [[ $label_home = linux-* ]] || return $(error "invalid label: $label_home")
+  [[ $label_root = linux-* ]] || return $(error "invalid label: $label_root")
   efisys=$(blkid --label $label_efi) || return
   linuxroot=$(blkid --label $label_root) || return
   mkfs.ext4 -q -L $label_root $linuxroot <<< y || return

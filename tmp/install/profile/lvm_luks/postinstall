@@ -68,10 +68,9 @@ configure_sdboot() {
 
 configure_tpm_unlocking() {
   has_tpm || return 0
-  [[ -f /tmp/temppass ]] || return 1
+  [[ -f $installbase/lukskey ]] || return
   local device=$(blkid --label pvroot)
-  chmod 600 /tmp/temppass
-  systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "" --unlock-key-file /tmp/temppass $device || return 1
+  systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "" --unlock-key-file $installbase/lukskey $device || return
   dracut --quiet -f --kver $(uname -r)
 }
 
