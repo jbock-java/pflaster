@@ -64,7 +64,7 @@
     "selinux-policy",
     "jq",
     "ntpsec",
-    "fedora-repos",
+    "tmux",
     "lvm2"
   ],
   "comments": [

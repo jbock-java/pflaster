@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+# A profile may or may not have this file.
+# If it exists, it runs unchrooted,
+# between "sysroot" mount and "postmount" script.
 
 dnf_config() {
   for repo in /etc/yum.repos.d/*.repo; do

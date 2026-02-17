@@ -5,7 +5,7 @@ source $installbase/partlib.sh
 dnf_configure_repos() {
   local script=$installbase/profile/$(get_profile)/dnf_config
   [[ -f $script ]] || return 0
-  $script || return
+  run $script || return
   if [[ $(get_config .copy_repos) = "true" ]]; then
     mkdir -p $sysroot/etc/yum.repos.d
     cp /etc/yum.repos.d/*.repo $sysroot/etc/yum.repos.d
@@ -22,8 +22,12 @@ mount_misc() {
 
 postmount() {
   local script=$installbase/profile/$(get_profile)/postmount
-  [[ -f script ]] || return 0
-  $script
+  if [[ -f $script ]]; then
+    run $script
+    return
+  else
+    echo "no such script"
+  fi
 }
 
 dnf_setup() {
@@ -72,13 +76,6 @@ mount_efisys() {
   local device
   device=$(blkid --label $(get_label efi)) || return
   mount --mkdir=0700 -o fmask=0077 -o dmask=0077 -o shortname=winnt $device $sysroot/boot/efi
-}
-
-configure_hostname() {
-  mkdir -p $sysroot/etc
-  local hostname
-  hostname="$(get_config .hostname)"
-  echo "${hostname:-box}" > $sysroot/etc/hostname
 }
 
 configure_machine_id() {
@@ -167,7 +164,7 @@ chrooted_postinstall() {
 do_everything() {
 
   # Preparations
-  echo "Type 'C-b c stop' to halt at the end, or 'C-b c stop --now' to halt earlier."
+  echo "Type 'C-b c stop' to halt after installation, or 'C-b c stop --now' to halt earlier."
   run configure_disk || return
   run configure_profile || return
   run $installbase/profile/$(get_profile)/storage || return
@@ -177,13 +174,13 @@ do_everything() {
   run mount_misc || return
   run cleanup_boot_entries || return
   run dnf_setup || return
+  update-ca-trust || return
   run postmount || return
 
   # Actual installation begins here
   run install_packages || return
   run copy_common || return
   run copy_profile || return
-  run configure_hostname || return
   run configure_machine_id || return
   run configure_dracut || return
   run extract_late_tgz || return

@@ -20,11 +20,11 @@ if [[ $1 = "-c" || $1 = "--continue" ]]; then
 elif [[ $1 = "--now" ]]; then
   touch /tmp/pause
   touch /tmp/stop
-  echo "Installer will halt at the end, and after the current step."
+  echo "Installer will halt after installation, and after the current step."
   print_usage
 elif [[ -z $1 ]]; then
   touch /tmp/stop
-  echo "Installer will halt at the end."
+  echo "Installer will halt after installation."
   print_usage
 else
   echo "[ERROR] Unknown token: $1"

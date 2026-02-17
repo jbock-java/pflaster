@@ -3,6 +3,7 @@
 # A profile may or may not have this file.
 # If it exists, it runs unchrooted,
 # between "sysroot" mount and kernel install.
+# dnf is already configured at this point.
 
 [[ -v installbase ]] || source /tmp/install/common.sh
 
@@ -12,8 +13,18 @@ copy_lukskey() {
   cp $installbase/lukskey $sysroot$installbase
 }
 
+configure_hostname() {
+  mkdir -p $sysroot/etc
+  local hostname="$(get_config .hostname)"
+  hostname="${hostname:-box}"
+  echo "$hostname" > $sysroot/etc/hostname
+  echo "$hostname" > /etc/hostname
+  echo "$hostname" > /proc/sys/kernel/hostname
+}
+
 postmount() {
-  copy_lukskey
+  run copy_lukskey || return
+  run configure_hostname || return
 }
 
 return 2> /dev/null || {
