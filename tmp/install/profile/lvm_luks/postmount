@@ -17,9 +17,8 @@ configure_hostname() {
   mkdir -p $sysroot/etc
   local hostname="$(get_config .hostname)"
   hostname="${hostname:-box}"
-  echo "$hostname" > $sysroot/etc/hostname
-  echo "$hostname" > /etc/hostname
-  echo "$hostname" > /proc/sys/kernel/hostname
+  hostnamectl hostname $hostname || return
+  echo $hostname > $sysroot/etc/hostname
 }
 
 postmount() {
