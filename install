@@ -2,5 +2,7 @@
 #
 # This script is used for testing purposes.
 
-install -d $(dirname $0)/tmp/install /tmp/install
-cp -r $(dirname $0)/tmp/install /tmp
+(( $EUID == 0 )) || { echo "needs root" ; exit 1 ; }
+
+install -d $(dirname $0)/var/tmp/install /var/tmp/install
+cp -r $(dirname $0)/var/tmp/install /var/tmp

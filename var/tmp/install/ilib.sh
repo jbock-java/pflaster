@@ -61,15 +61,6 @@ configure_machine_id() {
   head -c 16 /dev/urandom | od -A n -t x1 | sed 's/ //g' > $sysroot/etc/machine-id
 }
 
-configure_dracut() {
-  local modules
-  modules=$(get_profile_config '.dracut_modules[]' | tr '\n' ' ')
-  modules=${modules% }
-  [[ $modules ]] || return 0
-  mkdir -p $sysroot/etc/dracut.conf.d
-  echo "add_dracutmodules+=\" $modules \"" > $sysroot/etc/dracut.conf.d/pflaster.conf
-}
-
 copy_logs() {
   [[ -f $installbase/pflaster.log ]] || return
   mkdir -p $sysroot/var/log/pflaster
@@ -124,8 +115,7 @@ copy_common() {
 
 copy_profile() {
   mkdir -p $sysroot$installbase
-  local profile=$(get_profile)
-  [[ -f $installbase/profile.txt ]] || return 1
+  [[ -f $installbase/profile.txt ]] || return
   cp $installbase/profile.txt $sysroot$installbase
 }
 
@@ -134,10 +124,16 @@ install_kernel() {
 }
 
 run_storage() {
-  local profile=$(get_profile)
-  local script=$installbase/profile/$profile/storage
-  [[ -f $script ]] || return 1
+  local storage=$(get_profile storage)
+  [[ $storage ]] || return
+  local script=$installbase/storage/$storage/storage
+  [[ -f $script ]] || return
   $script
+}
+
+configure_profile() {
+  choose storage || return
+  choose software || return
 }
 
 do_everything() {
@@ -162,7 +158,6 @@ do_everything() {
   run copy_common || return
   run copy_profile || return
   run configure_machine_id || return
-  run configure_dracut || return
   run mount_misc || return
   run_chrooted $installbase/install_sdboot || return
   run_chrooted $installbase/preinstall || return

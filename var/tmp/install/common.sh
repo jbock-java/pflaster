@@ -71,55 +71,65 @@ run_spawned() {
   echo "OK: systemd-nspawn $sysroot $1"
 }
 
-configure_profile() {
-  local REPLY profile profiles=()
-  if profile=$(getarg pf.profile); then
-    echo $profile > $installbase/profile.txt
-    echo "Profile selected: $profile"
+choose() {
+  local REPLY key options=()
+  if [[ -f $installbase/profile.txt ]] && grep -q -E "^$1=.*" $installbase/profile.txt; then
     return 0
   fi
-  for profile in $(jq -r '.profile | keys[]' "$installbase/config.json"); do
-    profiles+=($profile)
+  if key=$(getarg pf.$1); then
+    echo "$1=$key" >> $installbase/profile.txt
+    echo "Selection: $1=$key"
+    return 0
+  fi
+  for key in $(jq -r ".$1 | keys[]" $installbase/config.json); do
+    options+=($key)
   done
-  case ${#profiles[@]} in
+  case ${#options[@]} in
     0)
-      error "no profiles"
+      echo "ERROR: Got nothing to choose from."
       return 1
       ;;
     1)
-      echo ${profiles[@]} > $installbase/profile.txt
+      echo "$1=${options[@]}" >> $installbase/profile.txt
       return 0
       ;;
     *)
       local width=0
-      for profile in ${profiles[@]}; do
-        width=$(( width > ${#profile} ? width : ${#profile} ))
+      for key in "${options[@]}"; do
+        width=$(( width > ${#key} ? width : ${#key} ))
       done
       while true; do
-        echo "Available profiles:"
-        for profile in ${profiles[@]}; do
-          printf "  %-$((width))s - %s\n" $profile "$(get_config .profile.$profile.slogan)"
+        echo "${1}:"
+        for key in "${options[@]}"; do
+          printf "  %-$((width))s - %s\n" $key "$(jq -r .$1.$key.banner $installbase/config.json)"
         done
-        read -rp "Choose profile (default=${profiles[0]}): "
-        if [[ -z $REPLY ]]; then
-          echo ${profiles[0]} > $installbase/profile.txt
-          return 0
-        fi
-        for profile in ${profiles[@]}; do
-          if [[ $profile = "$REPLY" ]]; then
-            echo $profile > $installbase/profile.txt
-            return 0
+        read -rp "Choose $1 (default=${options[0]}): "
+        [[ $REPLY ]] || continue
+        local matches=0 remember
+        for key in "${options[@]}"; do
+          if [[ $key = ${REPLY}* ]]; then
+            (( matches++ ))
+            remember=$key
           fi
         done
-        echo "No such profile: $REPLY"
+        if (( matches == 0 )); then
+          echo "No such $1: $REPLY"
+        elif (( matches == 1 )); then
+          echo "$1=$remember" >> $installbase/profile.txt
+          echo "Selection: $1=$remember"
+          return 0
+        else
+          echo "Multiple matches: $REPLY"
+        fi
       done
       ;;
   esac
 }
 
 get_profile() {
-  [[ -f $installbase/profile.txt ]] || return $(error "profile not configured")
-  cat $installbase/profile.txt
+  [[ $1 ]] || return
+  [[ -f $installbase/profile.txt ]] || return
+  sed -n -E "s/^$1=(.*)/\\1/p" $installbase/profile.txt
 }
 
 remount() {
@@ -159,28 +169,32 @@ get_uuid() {
   lsblk -n --filter "LABEL == '$1'" -o UUID
 }
 
+is_empty_file() {
+  [[ -f $1 && ! -s $1 ]]
+}
+
 get_config() {
   local result
   result=$(jq -M -r "$1" "$installbase/config.json")
-  if [[ $result != "null" ]]; then
+  if [[ ${result:-null} != "null" ]]; then
     echo "$result"
   fi
-}
-
-get_profile_config() {
-  get_config ".profile.$(get_profile)$1"
 }
 
 has_modifier() {
   jq -M -r '.modifiers[]' "$installbase/config.json" | grep -q "^$1$"
 }
 
+
 get_label() {
-  get_profile_config ".partition.$1.label"
+  [[ $1 ]] || return
+  local storage=$(get_profile storage)
+  [[ $storage ]] || return
+  get_config ".storage.$storage.partition.$1"
 }
 
 configure_disk() {
-  [[ -f $installbase/disk ]] && return 0
+  [[ -f $installbase/disk ]] && return
   local path disks REPLY lsblk_printed=false
   disks=$(get_disks)
   disks=${disks% }
@@ -246,4 +260,21 @@ get_packages_regular() {
       echo "$pack"
     fi
   done < <(get_config '.packages[]')
+}
+
+get_disksize() {
+  local disk bytes
+  disk=$(get_disk) || return $(error "get_disk")
+  bytes=$(lsblk -b -n --filter "PATH == '$disk'" -o SIZE)
+  echo $(( bytes / ( 1024 * 1024 ) ))
+}
+
+get_only_child() {
+  [[ $1 ]] || return $(error "param: PATH")
+  local kname children
+  kname=$(lsblk -n --filter "PATH == '$1'" -o KNAME)
+  children=$(lsblk -n --filter "PKNAME == '$kname'" -o PATH | tr '\n' ' ')
+  children=${children% }
+  [[ $children = "${children// /}" ]] || return $(error "more than one child")
+  echo $children
 }

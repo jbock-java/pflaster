@@ -6,29 +6,15 @@
 
 [[ -v installbase ]] || source /tmp/install/common.sh
 
-get_disksize() {
-  local disk bytes
-  disk=$(get_disk) || return $(error "get_disk")
-  bytes=$(lsblk -b -n --filter "PATH == '$disk'" -o SIZE)
-  echo $(( bytes / ( 1024 * 1024 ) ))
-}
-
-get_only_child() {
-  [[ $1 ]] || return $(error "param: PATH")
-  local kname children
-  kname=$(lsblk -n --filter "PATH == '$1'" -o KNAME)
-  children=$(lsblk -n --filter "PKNAME == '$kname'" -o PATH | tr '\n' ' ')
-  children=${children% }
-  [[ $children = "${children// /}" ]] || return $(error "more than one child")
-  echo $children
+get_pvrootsize() {
+  local disksize efisize=2044
+  disksize=$(get_disksize)
+  echo $(( disksize - efisize - 32 ))
 }
 
 print_parted_commands() {
-  local disksize efizsize
-  disksize=$(get_disksize)
-  efisize=$(get_config .profile.lvm_plain.partition.efi.defaultsize)
-  efisize=${efisize:-2044}
-  local pvrootsize=$(( disksize - efisize - 32 ))
+  local efisize=2044
+  local pvrootsize=$(get_pvrootsize)
   local pos=4
   echo "mklabel gpt"
   echo "mkpart EFISYS fat32 ${pos}MiB $(( pos + efisize ))MiB"
@@ -40,9 +26,9 @@ print_parted_commands() {
 
 create_partitions() {
   local disk part pvroot rootsize homesize label_home label_root label_efi
-  label_home=$(get_config .profile.lvm_plain.partition.home.label) || return
-  label_root=$(get_config .profile.lvm_plain.partition.root.label) || return
-  label_efi=$(get_config .profile.lvm_plain.partition.efi.label) || return
+  label_home=$(get_config .storage.plain_lvm.partition.home) || return
+  label_root=$(get_config .storage.plain_lvm.partition.root) || return
+  label_efi=$(get_config .storage.plain_lvm.partition.efi) || return
   [[ $label_home = linux-* ]] || return $(error "invalid label: $label_home")
   [[ $label_root = linux-* ]] || return $(error "invalid label: $label_root")
   disk=$(get_disk) || return $(error "get_disk")
@@ -51,8 +37,11 @@ create_partitions() {
   pvroot=$(by_partlabel pvroot)
   pvcreate $pvroot || return
   vgcreate linux $pvroot || return
-  rootsize=$(get_config .profile.lvm_plain.partition.root.defaultsize)
-  homesize=$(get_config .profile.lvm_plain.partition.home.defaultsize)
+  rootsize=$(( pvrootsize / 2 ))
+  rootsize=$(( rootsize > 65536 ? 65536 : rootsize ))
+  rootsize=$(( rootsize < 8192 ? 8192 : rootsize ))
+  homesize=$(( pvrootsize - rootsize - 32 ))
+  homesize=$(( homesize > 65536 ? 65536 : homesize ))
   lvcreate -L ${rootsize:-8192}M -n ${label_root#linux-} linux || return
   lvcreate -L ${homesize:-2048}M -n ${label_home#linux-} linux || return
   mkfs.ext4 -q -L $label_root /dev/mapper/$label_root <<< y || return
@@ -62,9 +51,9 @@ create_partitions() {
 format_root() {
   [[ -f $installbase/lukskey ]] || return 1
   local efisys label_home label_root label_efi
-  label_home=$(get_config .profile.lvm_plain.partition.home.label) || return
-  label_root=$(get_config .profile.lvm_plain.partition.root.label) || return
-  label_efi=$(get_config .profile.lvm_plain.partition.efi.label) || return
+  label_home=$(get_config .storage.plain_lvm.partition.home) || return
+  label_root=$(get_config .storage.plain_lvm.partition.root) || return
+  label_efi=$(get_config .storage.plain_lvm.partition.efi) || return
   [[ $label_home = linux-* ]] || return $(error "invalid label: $label_home")
   [[ $label_root = linux-* ]] || return $(error "invalid label: $label_root")
   efisys=$(blkid --label $label_efi) || return
@@ -76,8 +65,13 @@ format_root() {
 prepare_partitions() {
   local label_home
   vgchange -ay
-  label_home=$(get_config .profile.lvm_plain.partition.home.label) || return
-  if ! has_modifier "always-wipe" && blkid --label $label_home &> /dev/null; then
+  label_home=$(get_config .storage.plain_lvm.partition.home) || return
+  if blkid --label $label_home &> /dev/null; then
+    while true; do
+      read -rp "Erase all data on $(get_disk)? [y/N] "
+      [[ $REPLY =~ [yY] ]] && break
+      [[ $REPLY =~ [nN] ]] && { echo "I sleep." ; sleep inf ; }
+    done
     format_root
     return
   fi

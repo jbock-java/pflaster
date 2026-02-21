@@ -6,29 +6,15 @@
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
-get_disksize() {
-  local disk bytes
-  disk=$(get_disk) || return $(error "get_disk")
-  bytes=$(lsblk -b -n --filter "PATH == '$disk'" -o SIZE)
-  echo $(( bytes / ( 1024 * 1024 ) ))
-}
-
-get_only_child() {
-  [[ $1 ]] || return $(error "param: PATH")
-  local kname children
-  kname=$(lsblk -n --filter "PATH == '$1'" -o KNAME)
-  children=$(lsblk -n --filter "PKNAME == '$kname'" -o PATH | tr '\n' ' ')
-  children=${children% }
-  [[ $children = "${children// /}" ]] || return $(error "more than one child")
-  echo $children
+get_pvrootsize() {
+  local disksize efisize=2044
+  disksize=$(get_disksize)
+  echo $(( disksize - efisize - 32 ))
 }
 
 print_parted_commands() {
-  local disksize efizsize
-  disksize=$(get_disksize)
-  efisize=$(get_config .profile.lvm_luks.partition.efi.defaultsize)
-  efisize=${efisize:-2044}
-  local pvrootsize=$(( disksize - efisize - 32 ))
+  local efisize=2044
+  local pvrootsize=$(get_pvrootsize)
   local pos=4
   echo "mklabel gpt"
   echo "mkpart EFISYS fat32 ${pos}MiB $(( pos + efisize ))MiB"
@@ -53,12 +39,13 @@ ask_new_lukskey() {
 
 create_partitions() {
   local disk part pvroot luksroot rootsize homesize label_home label_root label_efi
-  label_home=$(get_config .profile.lvm_luks.partition.home.label) || return
-  label_root=$(get_config .profile.lvm_luks.partition.root.label) || return
-  label_efi=$(get_config .profile.lvm_luks.partition.efi.label) || return
+  local pvrootsize=$(get_pvrootsize)
+  label_home=$(get_config .storage.luks_lvm.partition.home) || return
+  label_root=$(get_config .storage.luks_lvm.partition.root) || return
+  label_efi=$(get_config .storage.luks_lvm.partition.efi) || return
   [[ $label_home = luks-* ]] || return $(error "invalid label: $label_home")
   [[ $label_root = luks-* ]] || return $(error "invalid label: $label_root")
-  while true; do
+  while :; do
     ask_new_lukskey && break
   done
   disk=$(get_disk) || return $(error "get_disk")
@@ -71,10 +58,13 @@ create_partitions() {
   luksroot=$(get_only_child $pvroot) || return
   pvcreate $luksroot || return
   vgcreate luks $luksroot || return
-  rootsize=$(get_config .profile.lvm_luks.partition.root.defaultsize)
-  homesize=$(get_config .profile.lvm_luks.partition.home.defaultsize)
-  lvcreate -L ${rootsize:-8192}M -n ${label_root#luks-} luks || return
-  lvcreate -L ${homesize:-2048}M -n ${label_home#luks-} luks || return
+  rootsize=$(( pvrootsize / 2 ))
+  rootsize=$(( rootsize > 65536 ? 65536 : rootsize ))
+  rootsize=$(( rootsize < 8192 ? 8192 : rootsize ))
+  homesize=$(( pvrootsize - rootsize - 32 ))
+  homesize=$(( homesize > 65536 ? 65536 : homesize ))
+  lvcreate -L ${rootsize}M -n ${label_root#luks-} luks || return
+  lvcreate -L ${homesize}M -n ${label_home#luks-} luks || return
   mkfs.ext4 -q -L $label_root /dev/mapper/$label_root <<< y || return
   mkfs.ext4 -q -L $label_home /dev/mapper/$label_home <<< y || return
 }
@@ -85,18 +75,21 @@ ask_existing_lukskey() {
   echo "Found pvroot: $pvroot"
   read -rsp "Enter lukskey, or leave empty to wipe: "
   echo
-  [[ -z $REPLY ]] && return 125
+  if [[ -z $REPLY ]]; then
+    echo -n "" > $installbase/lukskey
+    return 1
+  fi
   echo -n "$REPLY" > $installbase/lukskey
   chmod 600 $installbase/lukskey
   cryptsetup luksOpen -q --disable-external-tokens --key-file $installbase/lukskey --test-passphrase $pvroot
 }
 
-unlock_pvroot() {
+unlock() {
   [[ -f $installbase/lukskey ]] || return 1
   local pvroot luks_root efisys label_home label_root label_efi
-  label_home=$(get_config .profile.lvm_luks.partition.home.label) || return
-  label_root=$(get_config .profile.lvm_luks.partition.root.label) || return
-  label_efi=$(get_config .profile.lvm_luks.partition.efi.label) || return
+  label_home=$(get_config .storage.luks_lvm.partition.home) || return
+  label_root=$(get_config .storage.luks_lvm.partition.root) || return
+  label_efi=$(get_config .storage.luks_lvm.partition.efi) || return
   [[ $label_home = luks-* ]] || return $(error "invalid label: $label_home")
   [[ $label_root = luks-* ]] || return $(error "invalid label: $label_root")
   efisys=$(blkid --label $label_efi) || return
@@ -109,28 +102,35 @@ unlock_pvroot() {
   mkfs.vfat -n $label_efi -F 32 $efisys || return
 }
 
-prepare_partitions() {
-  if ! has_modifier "always-wipe" && blkid --label pvroot &> /dev/null; then
-    while true; do
-      ask_existing_lukskey
-      case $? in
-        125)
-          break
-          ;;
-        0)
-          unlock_pvroot
-          return
-          ;;
-      esac
-    done
-  fi
+wipe() {
   local REPLY
-  while true; do
+  while :; do
     read -rp "Erase all data on $(get_disk)? [y/N] "
-    [[ $REPLY =~ [yY] ]] && break
-    [[ $REPLY =~ [nN] ]] && { echo "I sleep." ; sleep inf ; }
+    if [[ $REPLY =~ [yY] ]]; then
+      break
+    elif [[ $REPLY =~ [nN] ]]; then
+      echo "I sleep."
+      sleep inf
+    fi
   done
   create_partitions
+}
+
+prepare_partitions() {
+  if ! blkid --label pvroot &> /dev/null; then
+    echo "No such partition: pvroot"
+    wipe
+    return
+  fi
+  while :; do
+    if ask_existing_lukskey; then
+      unlock
+      return
+    elif is_empty_file $installbase/lukskey; then
+      wipe
+      return
+    fi
+  done
 }
 
 return 2> /dev/null || {
