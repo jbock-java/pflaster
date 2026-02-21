@@ -1,63 +1,41 @@
-[[ -v installbase ]] || source /tmp/install/common.sh
+[[ -v installbase ]] || source /var/tmp/install/common.sh
 
 source $installbase/partlib.sh
 
-dnf_configure_repos() {
-  local script=$installbase/profile/$(get_profile)/dnf_config
-  [[ -f $script ]] || return 0
-  run $script || return
-  if [[ $(get_config .copy_repos) = "true" ]]; then
-    mkdir -p $sysroot/etc/yum.repos.d
-    cp /etc/yum.repos.d/*.repo $sysroot/etc/yum.repos.d
-  fi
-}
-
 mount_misc() {
+  remount /dev || return
+  remount /dev/pts || return
   remount /proc || return
   remount /sys || return
   remount /run || return
   remount /sys/firmware/efi/efivars || return
-  remount /dev || return
+}
+
+umount_misc() {
+  uremount /dev/pts || return
+  uremount /dev || return
+  uremount /proc || return
+  uremount /sys/firmware/efi/efivars || return
+  uremount /sys || return
+  uremount /run || return
 }
 
 postmount() {
-  local script=$installbase/profile/$(get_profile)/postmount
-  if [[ -f $script ]]; then
-    run $script
-    return
-  else
-    echo "no such script"
+  local script=$installbase/postmount
+  if [[ ! -f $script ]]; then
+    echo "File not found: $script"
+    return 0
   fi
+  $script
 }
 
-dnf_setup() {
-  [[ -e /etc/yum.repos.d ]] && return 0
-  ln -s /etc/anaconda.repos.d /etc/yum.repos.d
-  dnf_configure_repos
-}
-
-os_release() {
-  sed -n -E 's/^VERSION_ID=(\S+)/\1/p' /etc/os-release
-}
-
-dnf_install_rootfs() {
-  echo "dnf install: $@"
-  dnf4 -qy --color=never install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
-}
-
-dnf_remove_rootfs() {
-  echo "dnf remove: $@"
-  dnf4 -qy --color=never remove --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
-}
-
-dnf_environment_install_rootfs() {
-  echo "dnf environment install: $@"
-  dnf4 -qy --color=never environment install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
-}
-
-dnf_group_install_rootfs() {
-  echo "dnf group install: $@"
-  dnf4 -qy --color=never group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+postgroups() {
+  local script=$installbase/postgroups
+  if [[ ! -f $script ]]; then
+    echo "File not found: $script"
+    return 0
+  fi
+  $script
 }
 
 mount_rootfs() {
@@ -93,19 +71,10 @@ configure_dracut() {
   fi
 }
 
-extract_late_tgz() {
-  tar --no-same-owner -xf /tmp/late.tgz --directory /
-}
-
 copy_logs() {
   [[ -f $installbase/pflaster.log ]] || return
   mkdir -p $sysroot/var/log/pflaster
   cp $installbase/pflaster.log $sysroot/var/log/pflaster
-}
-
-copy_dnf_config() {
-  mkdir -p $sysroot/etc/yum.repos.d
-  cp /etc/yum.repos.d/*.repo $sysroot/etc/yum.repos.d
 }
 
 cleanup_boot_entries() {
@@ -116,25 +85,36 @@ cleanup_boot_entries() {
   done
 }
 
+install_groups() {
+  local pack packs=()
+  while read -r pack; do
+    packs+=("$pack")
+  done < <(get_packages_groups)
+  dnf_group_install_rootfs "${packs[@]}"
+}
+
+remove_packages() {
+  local pack packs=()
+  while read -r pack; do
+    packs+=("$pack")
+  done < <(get_packages_excludes)
+  dnf_remove_rootfs "${packs[@]}" || true
+}
+
 install_packages() {
-  local pack_env pack_group pack_exclude pack_regular
-  pack_env=$(get_packages_environments)
-  pack_group=$(get_packages_groups)
-  pack_exclude=$(get_packages_excludes)
-  pack_regular=$(get_packages_regular)
-  if [[ $pack_env ]]; then
-    dnf_environment_install_rootfs $pack_env || return
+  local pack packs=()
+  while read -r pack; do
+    packs+=("$pack")
+  done < <(get_packages_regular)
+  dnf_install_rootfs "${packs[@]}"
+}
+
+install_more_packages() {
+  if [[ ! -f $installbase/install_more_packages ]]; then
+    echo "File not found: $installbase/install_more_packages"
+    return 0
   fi
-  if [[ $pack_group ]]; then
-    dnf_group_install_rootfs $pack_group || return
-  fi
-  if [[ $pack_exclude ]]; then
-    dnf_remove_rootfs $pack_exclude || return
-  fi
-  if [[ $pack_regular ]]; then
-    dnf_install_rootfs $pack_regular || return
-  fi
-  return 0
+  $installbase/install_more_packages
 }
 
 copy_common() {
@@ -146,8 +126,7 @@ copy_common() {
 copy_profile() {
   mkdir -p $sysroot$installbase
   local profile=$(get_profile)
-  cp $installbase/profile/$profile/preinstall $sysroot$installbase || return
-  cp $installbase/profile/$profile/postinstall $sysroot$installbase || return
+  [[ -f $installbase/profile.txt ]] || return 1
   cp $installbase/profile.txt $sysroot$installbase
 }
 
@@ -155,10 +134,11 @@ install_kernel() {
   dnf_install_rootfs kernel-modules-core-$(uname -r)
 }
 
-chrooted_postinstall() {
-  mkdir -p $sysroot/root
-  cp $installbase/chrooted/postinstall $sysroot/root/postinstall
-  chroot $sysroot /root/postinstall
+run_storage() {
+  local profile=$(get_profile)
+  local script=$installbase/profile/$profile/storage
+  [[ -f $script ]] || return 1
+  $script
 }
 
 do_everything() {
@@ -167,28 +147,29 @@ do_everything() {
   echo "Type 'C-b c stop' to halt after installation, or 'C-b c stop --now' to halt earlier."
   run configure_disk || return
   run configure_profile || return
-  run $installbase/profile/$(get_profile)/storage || return
+  run_storage || return
   run mount_rootfs || return
   run mount_home || return
   run mount_efisys || return
-  run mount_misc || return
   run cleanup_boot_entries || return
-  run dnf_setup || return
-  update-ca-trust || return
   run postmount || return
 
   # Actual installation begins here
+  run install_groups || return
+  run postgroups || return
+  run remove_packages || return
   run install_packages || return
+  run install_more_packages || return
   run copy_common || return
   run copy_profile || return
   run configure_machine_id || return
   run configure_dracut || return
-  run extract_late_tgz || return
+  run mount_misc || return
   run_chrooted $installbase/install_sdboot || return
   run_chrooted $installbase/preinstall || return
   run install_kernel || return
   run_chrooted $installbase/postinstall || return
-  run copy_dnf_config || return
+  run umount_misc || return
   run copy_logs || return
   [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
   reboot

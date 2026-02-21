@@ -1,4 +1,4 @@
-installbase=/tmp/install
+installbase=/var/tmp/install
 sysroot=/mnt/sysroot
 
 getarg() {
@@ -15,6 +15,10 @@ getarg() {
     fi
   done
   return 1
+}
+
+os_release() {
+  sed -n -E 's/^VERSION_ID=(\S+)/\1/p' /etc/os-release
 }
 
 error() {
@@ -35,14 +39,36 @@ run() {
 
 run_chrooted() {
   [[ -f $sysroot$installbase/profile.txt ]] || return 1
-  echo "Running: chroot $sysroot $1"
+  if [[ -f $sysroot$1 ]]; then
+    echo "Running: chroot $sysroot $1"
+  else
+    echo "Not found: $sysroot$1"
+    return 0
+  fi
   chroot $sysroot $1 || return $(error "chroot $sysroot $1")
   if [[ -f /tmp/pause ]]; then
-    echo "Halted. 'stop -c' to continue."
+    echo "Installation is halted. Type 'stop -c' to continue."
     sleep inf
     rm -f /tmp/pause
   fi
   echo "OK: chroot $sysroot $1"
+}
+
+run_spawned() {
+  [[ -f $sysroot$installbase/profile.txt ]] || return 1
+  if [[ -f $sysroot$1 ]]; then
+    echo "Running: systemd-nspawn -M pflaster -D $sysroot $1"
+  else
+    echo "Not found: $sysroot$1"
+    return 0
+  fi
+  systemd-nspawn -M pflaster -q -D $sysroot $1 || return
+  if [[ -f /tmp/pause ]]; then
+    echo "Installation is halted. Type 'stop -c' to continue."
+    sleep inf
+    rm -f /tmp/pause
+  fi
+  echo "OK: systemd-nspawn $sysroot $1"
 }
 
 configure_profile() {
@@ -97,10 +123,19 @@ get_profile() {
 }
 
 remount() {
-  if findmnt -n $sysroot/$1 &> /dev/null; then
+  local target=$sysroot$1
+  if findmnt -n $target &> /dev/null; then
     return 0
   fi
-  mount --bind -m $1 $sysroot/$1
+  mount --bind -m $1 $target
+}
+
+uremount() {
+  local target=$sysroot$1
+  if ! findmnt -n $target &> /dev/null; then
+    return 0
+  fi
+  umount $target || true
 }
 
 has_tpm() {
@@ -128,7 +163,7 @@ get_config() {
   local result
   result=$(jq -M -r "$1" "$installbase/config.json")
   if [[ $result != "null" ]]; then
-    echo $result
+    echo "$result"
   fi
 }
 
@@ -171,54 +206,44 @@ get_disk() {
   cat $installbase/disk
 }
 
-get_packages_groups() {
-  local packages result=()
-  packages=$(get_config '.packages[]') || return
-  for pack in $packages; do
-    if [[ $pack = @* && $pack != @^* ]]; then
-      result+=(${pack:1})
-    fi
-  done
-  if (( ${#pack[@]} > 0 )); then
-    echo ${result[@]}
-  fi
+dnf_install_rootfs() {
+  echo "dnf install: $@"
+  dnf4 -qy --color=never install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
-get_packages_environments() {
-  local packages result=()
-  packages=$(get_config '.packages[]') || return
-  for pack in $packages; do
-    if [[ $pack = @^* ]]; then
-      result+=(${pack:2})
+dnf_remove_rootfs() {
+  echo "dnf remove: $@"
+  dnf4 -qy --color=never remove --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+}
+
+dnf_group_install_rootfs() {
+  echo "dnf group install: $@"
+  dnf4 -qy --color=never group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
+}
+
+get_packages_groups() {
+  local pack
+  while read -r pack; do
+    if [[ $pack = @* && $pack != @^* ]]; then
+      echo "${pack:1}"
     fi
-  done
-  if (( ${#pack[@]} > 0 )); then
-    echo ${result[@]}
-  fi
+  done < <(get_config '.packages[]')
 }
 
 get_packages_excludes() {
-  local packages result=()
-  packages=$(get_config '.packages[]') || return
-  for pack in $packages; do
+  local pack
+  while read -r pack; do
     if [[ $pack = -* ]]; then
-      result+=(${pack:1})
+      echo "${pack:1}"
     fi
-  done
-  if (( ${#pack[@]} > 0 )); then
-    echo ${result[@]}
-  fi
+  done < <(get_config '.packages[]')
 }
 
 get_packages_regular() {
-  local packages result=()
-  packages=$(get_config '.packages[]') || return
-  for pack in $packages; do
+  local pack
+  while read -r pack; do
     if [[ $pack != @* && $pack != -* ]]; then
-      result+=($pack)
+      echo "$pack"
     fi
-  done
-  if (( ${#pack[@]} > 0 )); then
-    echo ${result[@]}
-  fi
+  done < <(get_config '.packages[]')
 }

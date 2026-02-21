@@ -1,6 +1,5 @@
 {
-  "rootpw": "$y$j9T$Z8eb91D38tABRM.x4J2KI.$C0.kMwhsPptRWIhQ475Y1HWjxuz7c8DekzpgGlzXSbA",
-  "hostname": "box",
+  "rootpw": "$6$sjydBRefSrybqdv8$En6DBFF1EiKIKYqOg/ABH.mlnAZRhkrkTa3U44Bv6Z.4RitVTfGhAUADOjy4S4Fab6/TXz.Megw8vnl1/mZao0",
   "modifiers": [
   ],
   "copy_repos": false,
@@ -25,26 +24,6 @@
         "tpm2-tss",
         "lvm"
       ]
-    },
-    "lvm_plain": {
-      "slogan": "Basic LVM + ext4 setup. No encryption.",
-      "partition": {
-        "efi": {
-          "label": "EFISYS",
-          "defaultsize": 2044
-        },
-        "root": {
-          "label": "linux-root",
-          "defaultsize": 8192
-        },
-        "home": {
-          "label": "linux-home",
-          "defaultsize": 2048
-        }
-      },
-      "dracut_modules": [
-        "lvm"
-      ]
     }
   },
   "user": {
@@ -55,7 +34,7 @@
     }
   },
   "packages": [
-    "@core",
+    "@Core",
     "-nano-default-editor",
     "vim-enhanced",
     "vim-default-editor",
@@ -63,7 +42,7 @@
     "efibootmgr",
     "selinux-policy",
     "jq",
-    "ntpsec",
+    "chrony",
     "tmux",
     "lvm2"
   ],
