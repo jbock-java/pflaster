@@ -103,7 +103,7 @@ choose() {
         for key in "${options[@]}"; do
           printf "  %-$((width))s - %s\n" $key "$(jq -r .$1.$key.banner $installbase/config.json)"
         done
-        read -rp "Choose $1 (default=${options[0]}): "
+        read -rp "Choose $1 (prefix accepted): "
         [[ $REPLY ]] || continue
         local matches=0 remember
         for key in "${options[@]}"; do

@@ -1,0 +1,61 @@
+#!/bin/bash
+#
+# This runs chrooted.
+# Preinstall means right before ""kernel"" install.
+
+[[ -v installbase ]] || source /tmp/install/common.sh
+
+configure_crypttab() {
+  mkdir -p /etc
+  echo "luks UUID=$(get_uuid pvroot) none discard,tpm2-device=auto" > /etc/crypttab
+}
+
+print_fstab() {
+  local label_home label_root label_efi uuid_home uuid_root uuid_efi
+  label_home=$(get_config .storage.luks_lvm.partition.home)
+  label_root=$(get_config .storage.luks_lvm.partition.root)
+  label_efi=$(get_config .storage.luks_lvm.partition.efi)
+  uuid_efi=$(get_uuid $label_efi)
+  uuid_root=$(get_uuid $label_root)
+  uuid_home=$(get_uuid $label_home)
+  [[ $uuid_efi ]] || return
+  [[ $uuid_root ]] || return
+  [[ $uuid_home ]] || return
+  echo "UUID=$uuid_efi  /boot/efi vfat umask=0077,shortname=winnt 0 2"
+  echo "UUID=$uuid_root /         ext4 defaults 1 2"
+  echo "UUID=$uuid_home /home     ext4 defaults 1 2"
+}
+
+configure_fstab() {
+  mkdir -p /etc
+  print_fstab >> /etc/fstab
+}
+
+print_cmdline_options() {
+  local uuid_root label_root
+  label_root=$(get_config .storage.luks_lvm.partition.root)
+  uuid_root=$(get_uuid $label_root)
+  uuid_pvroot=$(get_uuid pvroot)
+  [[ $uuid_root ]] || return
+  [[ $uuid_pvroot ]] || return
+  echo "root=UUID=$uuid_root"
+  echo "rd.luks.uuid=$uuid_pvroot"
+  echo "rd.lvm.vg=luks"
+  echo "rd.shell"
+}
+
+configure_cmdline() {
+  mkdir -p /etc/kernel
+  local options=$(print_cmdline_options | tr '\n' ' ')
+  echo ${options% } > /etc/kernel/cmdline
+}
+
+do_prepare() {
+  run configure_crypttab || return
+  run configure_fstab || return
+  run configure_cmdline || return
+}
+
+return 2> /dev/null || {
+  do_prepare
+}

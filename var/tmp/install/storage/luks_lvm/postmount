@@ -5,23 +5,32 @@
 # between "sysroot" mount and kernel install.
 # dnf is already configured at this point.
 
-[[ -v installbase ]] || source /tmp/install/common.sh
+[[ -v installbase ]] || source /var/tmp/install/common.sh
 
 copy_lukskey() {
-  [[ -f $installbase/lukskey ]] || return 1
+  [[ -f $installbase/lukskey ]] || return
   mkdir -p $sysroot$installbase
   cp $installbase/lukskey $sysroot$installbase
 }
 
 configure_hostname() {
-  mkdir -p $sysroot/etc
+  # make this a config
   local hostname="$(get_config .hostname)"
-  hostname="${hostname:-box}"
-  hostnamectl hostname $hostname || return
-  echo $hostname > $sysroot/etc/hostname
+  [[ $hostname ]] || return
+  hostnamectl hostname $hostname
+}
+
+extract_late_tgz() {
+  tar --no-same-owner -xf /tmp/late.tgz --directory /
+}
+
+copy_bootstrapped_yum_config() {
+  cp -r $sysroot/etc/yum.repos.d /etc/yum.repos.d
 }
 
 postmount() {
+  run extract_late_tgz || return
+  run copy_bootstrapped_yum_config || return
   run copy_lukskey || return
   run configure_hostname || return
 }

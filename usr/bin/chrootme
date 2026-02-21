@@ -1,3 +1,11 @@
 #!/bin/bash
 
-exec -c chroot /mnt/sysroot /bin/bash -li
+[[ -v mount_misc ]] || source /var/tmp/install/ilib.sh
+
+if [[ $1 = "-s" || $1 = "--spawn" ]]; then
+  umount_misc
+  exec -c systemd-nspawn -M pflaster -D /mnt/sysroot /bin/bash
+else
+  mount_misc
+  exec -c chroot /mnt/sysroot /bin/bash -li
+fi

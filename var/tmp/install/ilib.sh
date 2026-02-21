@@ -21,7 +21,9 @@ umount_misc() {
 }
 
 postmount() {
-  local script=$installbase/postmount
+  local storage=$(get_profile storage)
+  [[ $storage ]] || return
+  local script=$installbase/storage/$storage/postmount
   if [[ ! -f $script ]]; then
     echo "File not found: $script"
     return 0
@@ -131,9 +133,27 @@ run_storage() {
   $script
 }
 
-configure_profile() {
-  choose storage || return
-  choose software || return
+run_preinstall() {
+  local storage=$(get_profile storage)
+  [[ $storage ]] || return
+  local script=$installbase/storage/$storage/preinstall
+  [[ -f $script ]] || return
+  mkdir -p $(dirname $sysroot$script)
+  cp $script $sysroot$script
+  run_chrooted $script
+}
+
+configure() {
+  while :; do
+    choose storage || return
+    choose software || return
+    echo "Current config:"
+    cat $installbase/profile.txt
+    read -rp "Is this correct? [Y/n] "
+    if [[ -z $REPLY ]] || [[ $REPLY =~ [yY] ]]; then
+      return 0
+    fi
+  done
 }
 
 do_everything() {
@@ -141,7 +161,7 @@ do_everything() {
   # Preparations
   echo "Type 'C-b c stop' to halt after installation, or 'C-b c stop --now' to halt earlier."
   run configure_disk || return
-  run configure_profile || return
+  run configure || return
   run_storage || return
   run mount_rootfs || return
   run mount_home || return
@@ -150,17 +170,17 @@ do_everything() {
   run postmount || return
 
   # Actual installation begins here
+  run copy_profile || return
   run install_groups || return
   run postgroups || return
   run remove_packages || return
   run install_packages || return
   run install_more_packages || return
   run copy_common || return
-  run copy_profile || return
   run configure_machine_id || return
   run mount_misc || return
   run_chrooted $installbase/install_sdboot || return
-  run_chrooted $installbase/preinstall || return
+  run_preinstall || return
   run install_kernel || return
   run_chrooted $installbase/postinstall || return
   run umount_misc || return
