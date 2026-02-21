@@ -1,0 +1,60 @@
+#!/bin/bash
+#
+# Some things don't work in a chroot, so do them here.
+
+[[ -v installbase ]] || source /var/tmp/install/common.sh
+
+install_more_stuff() {
+  local groups=(
+    kde-desktop
+    fonts
+    base-graphical
+  )
+  echo "dnf install group ${groups[@]}"
+  dnf -qy --color=never \
+      -x grub2-common \
+      -x grub2-pc \
+      -x grub2-pc-modules \
+      -x grub2-efi-x64 \
+      -x grub2-tools \
+      -x grub2-tools-minimal \
+      -x grub2-tools-extra \
+      -x grub2-tools-efi \
+      group install "${groups[@]}"
+}
+
+set_enforcing() {
+  rpm --quiet -q selinux-policy || return 0
+  sed -i -E 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
+  touch /.autorelabel
+}
+
+# change the target so pfirstboot won't run again
+set_target() {
+  if rpm --quiet -q sddm; then
+    systemctl set-default graphical.target || return
+  else
+    systemctl set-default multi-user.target || return
+  fi
+}
+
+set_timezone() {
+  # currently hardcoded, make this a config
+  timedatectl set-timezone Europe/Berlin
+}
+
+pfirstboot() {
+  run set_timezone || return
+  run install_more_stuff || return
+  run set_enforcing || return
+  run set_target || return
+  [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
+  systemctl reboot
+}
+
+return 2> /dev/null || {
+  echo Running: $0
+  pfirstboot
+}
+
+:

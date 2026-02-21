@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -o pipefail
+mkdir -p /var/log/pflaster
+/usr/local/bin/pfirstboot 2>&1 | tee /var/log/pflaster/pfirstboot.txt

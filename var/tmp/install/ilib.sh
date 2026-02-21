@@ -65,10 +65,9 @@ configure_dracut() {
   local modules
   modules=$(get_profile_config '.dracut_modules[]' | tr '\n' ' ')
   modules=${modules% }
-  if [[ $modules ]]; then
-    mkdir -p $sysroot/etc/dracut.conf.d
-    echo "add_dracutmodules+=\" $modules \"" > $sysroot/etc/dracut.conf.d/pflaster.conf
-  fi
+  [[ $modules ]] || return 0
+  mkdir -p $sysroot/etc/dracut.conf.d
+  echo "add_dracutmodules+=\" $modules \"" > $sysroot/etc/dracut.conf.d/pflaster.conf
 }
 
 copy_logs() {
