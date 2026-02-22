@@ -11,13 +11,14 @@ configure_crypttab() {
 }
 
 print_fstab() {
-  local label_home label_root label_efi uuid_home uuid_root uuid_efi
+  local label_home label_root label_efi uuid_home uuid_root uuid_efi vgname
   label_home=$(get_config .storage.luks_lvm.partition.home)
   label_root=$(get_config .storage.luks_lvm.partition.root)
   label_efi=$(get_config .storage.luks_lvm.partition.efi)
+  vgname=$(get_config .storage.luks_lvm.vgname)
   uuid_efi=$(get_uuid $label_efi)
-  uuid_root=$(get_uuid $label_root)
-  uuid_home=$(get_uuid $label_home)
+  uuid_root=$(get_uuid $vgname-$label_root)
+  uuid_home=$(get_uuid $vgname-$label_home)
   [[ $uuid_efi ]] || return
   [[ $uuid_root ]] || return
   [[ $uuid_home ]] || return
@@ -34,28 +35,31 @@ configure_fstab() {
 print_cmdline_options() {
   local uuid_root label_root
   label_root=$(get_config .storage.luks_lvm.partition.root)
-  uuid_root=$(get_uuid $label_root)
+  vgname=$(get_config .storage.luks_lvm.vgname)
+  [[ $vgname ]] || return
+  uuid_root=$(get_uuid $vgname-$label_root)
   uuid_pvroot=$(get_uuid pvroot)
   [[ $uuid_root ]] || return
   [[ $uuid_pvroot ]] || return
   echo "root=UUID=$uuid_root"
   echo "rd.luks.uuid=$uuid_pvroot"
-  echo "rd.lvm.vg=luks"
+  echo "rd.lvm.vg=$vgname"
   echo "rd.shell"
 }
 
 configure_cmdline() {
+  local options
   mkdir -p /etc/kernel
-  local options=$(print_cmdline_options | tr '\n' ' ')
+  options=$(print_cmdline_options | tr '\n' ' ') || return
   echo ${options% } > /etc/kernel/cmdline
 }
 
-do_prepare() {
+preinstall() {
   run configure_crypttab || return
   run configure_fstab || return
   run configure_cmdline || return
 }
 
 return 2> /dev/null || {
-  do_prepare
+  preinstall
 }

@@ -30,20 +30,37 @@ postmount_script() {
 }
 
 mount_rootfs() {
-  local device
-  device=$(blkid --label $(get_label root)) || return
+  local label device storage vgname
+  storage=$(get_profile storage)
+  [[ $storage ]] || return
+  label=$(get_config ".storage.$storage.partition.root")
+  vgname=$(get_config ".storage.$storage.vgname")
+  if [[ $vgname ]]; then
+    label=$vgname-$label
+  fi
+  device=$(blkid --label $label) || return
   mount -m $device $sysroot
 }
 
 mount_home() {
-  local device
-  device=$(blkid --label $(get_label home)) || return
+  local label device storage vgname
+  storage=$(get_profile storage)
+  [[ $storage ]] || return
+  label=$(get_config ".storage.$storage.partition.home")
+  vgname=$(get_config ".storage.$storage.vgname")
+  if [[ $vgname ]]; then
+    label=$vgname-$label
+  fi
+  device=$(blkid --label $label) || return
   mount -m $device $sysroot/home
 }
 
 mount_efisys() {
-  local device
-  device=$(blkid --label $(get_label efi)) || return
+  local label device storage
+  storage=$(get_profile storage)
+  [[ $storage ]] || return
+  label=$(get_config ".storage.$storage.partition.efi")
+  device=$(blkid --label $label) || return
   mount --mkdir=0700 -o fmask=0077 -o dmask=0077 -o shortname=winnt $device $sysroot/boot/efi
 }
 
@@ -100,8 +117,9 @@ install_more_packages() {
 
 copy_common() {
   mkdir -p $sysroot$installbase
+  mkdir -p $sysroot/usr/bin
   cp $installbase/common.sh $sysroot$installbase || return
-  cp $installbase/config.json $sysroot$installbase
+  cp $installbase/config.json $sysroot$installbase || return
 }
 
 copy_profile() {
@@ -169,10 +187,10 @@ extract_late_tgz() {
 }
 
 configure_hostname() {
-  # make this a config
   local hostname="$(get_config .hostname)"
-  [[ $hostname ]] || return
-  hostnamectl hostname $hostname
+  if [[ $hostname ]]; then
+    hostnamectl hostname $hostname
+  fi
 }
 
 do_everything() {

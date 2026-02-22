@@ -74,13 +74,17 @@ run_spawned() {
 choose() {
   local what="$1" REPLY choice options=()
   [[ $what ]] || return
-  if [[ -f $installbase/profile.txt ]] && grep -q -E "^$what=.*" $installbase/profile.txt; then
-    return 0
-  fi
-  if choice=$(getarg pf.$what); then
+  choice=$(getarg pf.$what)
+  touch $installbase/profile.txt
+  sed -i -E "/^$what=.*/d" $installbase/profile.txt
+  if [[ $choice ]]; then
     echo "$what=$choice" >> $installbase/profile.txt
     echo "$what=$choice preselected"
     return 0
+  elif [[ -f $installbase/profile.txt ]] && grep -q -E "^$what=.*" $installbase/profile.txt; then
+    choice=$(sed -n -E "s|^$what=(.*)\\$|\\1|p" $installbase/profile.txt)
+    read -rp "$what=$choice <- keep this choice? [n/Y] "
+    [[ -z $REPLY || $REPLY =~ [yY] ]] && return 0
   fi
   for choice in $(jq -r ".$what | keys[]" $installbase/config.json); do
     options+=($choice)
@@ -184,14 +188,6 @@ get_config() {
 
 has_modifier() {
   jq -M -r '.modifiers[]' "$installbase/config.json" | grep -q "^$1$"
-}
-
-
-get_label() {
-  [[ $1 ]] || return
-  local storage=$(get_profile storage)
-  [[ $storage ]] || return
-  get_config ".storage.$storage.partition.$1"
 }
 
 configure_disk() {

@@ -6,10 +6,12 @@
   "storage": {
     "luks_lvm": {
       "banner": "luks + lvm + ext4",
+      "pvname": "pvroot",
+      "vgname": "luks",
       "partition": {
         "efi": "EFISYS",
-        "root": "luks-root",
-        "home": "luks-home"
+        "root": "root",
+        "home": "home"
       }
     },
     "plain_lvm": {

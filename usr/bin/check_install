@@ -1,0 +1,17 @@
+#!/bin/bash
+
+show() {
+  if [[ -f $1 ]]; then
+    echo "Contents of $1:"
+    echo "######################################################################"
+    cat $1
+    echo "######################################################################"
+  else
+    echo "File not found: $1"
+  fi
+  echo
+}
+
+show /mnt/sysroot/etc/kernel/cmdline
+show /mnt/sysroot/etc/fstab
+show /mnt/sysroot/etc/crypttab
