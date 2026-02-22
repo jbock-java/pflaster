@@ -1,7 +1,5 @@
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
-source $installbase/partlib.sh
-
 mount_misc() {
   remount /dev || return
   remount /dev/pts || return
@@ -29,12 +27,6 @@ postmount_script() {
     return 0
   fi
   $script
-}
-
-postgroups_chrooted() {
-  local software=$(get_profile software)
-  [[ $software ]] || return
-  run_chrooted $installbase/software/$software/postgroups
 }
 
 mount_rootfs() {
@@ -130,16 +122,26 @@ storage_script() {
   $script
 }
 
-preinstall_chrooted() {
+run_hook_chrooted() {
   local storage=$(get_profile storage)
+  local software=$(get_profile software)
   [[ $storage ]] || return
-  run_chrooted $installbase/storage/$storage/preinstall
+  [[ $software ]] || return
+  run_chrooted $installbase/$1
+  run_chrooted $installbase/storage/$storage/$1
+  run_chrooted $installbase/software/$software/$1
+}
+
+postgroups_chrooted() {
+  run_hook_chrooted postgroups
+}
+
+preinstall_chrooted() {
+  run_hook_chrooted preinstall
 }
 
 postinstall_chrooted() {
-  local software=$(get_profile software)
-  [[ $software ]] || return
-  run_chrooted $installbase/software/$software/postinstall
+  run_hook_chrooted postinstall
 }
 
 configure() {
@@ -176,12 +178,12 @@ do_everything() {
   # Actual installation begins here
   run mount_misc || return
   run copy_profile || return
+  run copy_common || return
   run install_groups || return
   run postgroups_chrooted || return
   run remove_packages || return
   run install_packages || return
   run install_more_packages || return
-  run copy_common || return
   run configure_machine_id || return
   run install_sdboot || return
   run preinstall_chrooted || return

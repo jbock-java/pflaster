@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+# This runs chrooted, after kernel install.
+
+[[ -v installbase ]] || source /var/tmp/install/common.sh
+
+configure_tpm_unlocking() {
+  has_tpm || return 0
+  [[ -f $installbase/lukskey ]] || return
+  local device
+  device=$(blkid --label pvroot) || return
+  systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "" --unlock-key-file $installbase/lukskey $device || return
+  dracut --quiet -f --kver $(uname -r)
+}
+
+do_postinstall() {
+  run configure_tpm_unlocking
+}
+
+return 2> /dev/null || {
+  do_postinstall
+}

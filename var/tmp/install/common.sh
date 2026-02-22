@@ -280,14 +280,6 @@ get_only_child() {
   echo $children
 }
 
-enable_firstboot() {
-  [[ -f /usr/share/systemux/tmux.conf ]] || return
-  local software=$(get_profile software)
-  [[ $software ]] || return
-  sed -i -E "s@\\bFIRSTBOOT_SCRIPT\\b@/var/tmp/install/software/$software/firstboot@" /usr/share/systemux/tmux.conf
-  systemctl set-default systemux.target
-}
-
 get_users() {
   jq -r '.user | keys[]' "$installbase/config.json"
 }
@@ -340,21 +332,51 @@ set_root_pw() {
   chmod 000 /etc/shadow
 }
 
-set_enforcing() {
-  rpm --quiet -q selinux-policy || return 0
-  sed -i -E 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
+trigger_autorelabel() {
   touch /.autorelabel
 }
 
-set_target_anyboot() {
-  if rpm --quiet -q sddm; then
-    systemctl set-default graphical.target || return
-  else
-    systemctl set-default multi-user.target || return
-  fi
+set_enforcing() {
+  rpm --quiet -q selinux-policy || return 0
+  sed -i -E 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
+}
+
+set_nopasswd() {
+  chmod 640 /etc/sudoers
+  sed -i -E 's/^%wheel\b.*/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
+  chmod 440 /etc/sudoers
+}
+
+configure_sdboot() {
+  findmnt -n /boot/efi &> /dev/null || return
+  mkdir -p /boot/efi/loader
+  echo "timeout 30" >> /boot/efi/loader/loader.conf
 }
 
 set_timezone() {
   # currently hardcoded, make this a config
   timedatectl set-timezone Europe/Berlin
+}
+
+set_rtc_utc() {
+  timedatectl set-local-rtc 0
+}
+
+set_target_multi_user() {
+  systemctl set-default multi-user.target
+}
+
+set_target_graphical() {
+  systemctl set-default graphical.target
+}
+
+set_target_systemux() {
+  [[ -f /usr/share/systemux/tmux.conf ]] || return
+  local software=$(get_profile software)
+  [[ $software ]] || return
+  sed -i -E "s@\\bFIRSTBOOT_SCRIPT\\b@/var/tmp/install/software/$software/firstboot@" /usr/share/systemux/tmux.conf
+  if rpm --quiet -q selinux-policy; then
+    sed -i -E 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+  fi
+  systemctl set-default systemux.target
 }

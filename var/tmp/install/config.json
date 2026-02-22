@@ -56,7 +56,7 @@
     }
   },
   "packages": [
-    "@Core",
+    "@core",
     "-nano-default-editor",
     "vim-enhanced",
     "vim-default-editor",

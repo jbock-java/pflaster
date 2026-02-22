@@ -24,10 +24,10 @@ install_kde() {
 }
 
 firstboot_script() {
-  run set_timezone || return
   run install_kde || return
   run set_enforcing || return
-  run set_target_anyboot || return
+  run trigger_autorelabel || return
+  run set_target_graphical || return
   [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
   systemctl reboot
 }

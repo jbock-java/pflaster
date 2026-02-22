@@ -6,8 +6,9 @@
 
 firstboot_script() {
   run set_timezone || return
+  run set_rtc_utc || return
   run set_enforcing || return
-  run set_target_anyboot || return
+  run set_target_multi_user || return
   [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
   systemctl reboot
 }
