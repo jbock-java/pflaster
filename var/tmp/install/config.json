@@ -6,10 +6,12 @@
   "storage": {
     "luks_lvm": {
       "banner": "luks + lvm + ext4",
+      "pvname": "pvroot",
+      "vgname": "luks",
       "partition": {
         "efi": "EFISYS",
-        "root": "luks-root",
-        "home": "luks-home"
+        "root": "root",
+        "home": "home"
       }
     },
     "plain_lvm": {
@@ -56,7 +58,7 @@
     }
   },
   "packages": [
-    "@Core",
+    "@core",
     "-nano-default-editor",
     "vim-enhanced",
     "vim-default-editor",
@@ -67,10 +69,5 @@
     "chrony",
     "tmux",
     "lvm2"
-  ],
-  "comments": [
-    "Json does not have comments yet, so we put them here.",
-    "Possible modifiers:",
-    "    always-wipe   # DANGEROUS: Ignore any existing partitions, always wipe the whole disk."
   ]
 }

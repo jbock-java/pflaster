@@ -15,7 +15,8 @@ if [[ $1 = "-c" || $1 = "--continue" ]]; then
     kill $pid
     echo "OK, killed $pid"
   else
-    echo "[ERROR] no such process"
+    rm -f /tmp/pause /tmp/stop
+    echo "Installer will not halt after installation or after current step."
   fi
 elif [[ $1 = "--now" ]]; then
   touch /tmp/pause

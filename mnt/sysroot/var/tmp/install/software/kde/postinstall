@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+# This runs chrooted, after kernel install.
+
+[[ -v installbase ]] || source /var/tmp/install/common.sh
+
+do_postinstall() {
+  run set_target_systemux
+}
+
+return 2> /dev/null || {
+  do_postinstall
+}

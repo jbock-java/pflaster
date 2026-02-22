@@ -1,0 +1,10 @@
+[Unit]
+Description=systemux
+After=network-online.target
+OnFailure=rescue.target
+
+[Service]
+Type=forking
+Environment=HOME=/root PATH=/usr/bin:/bin:/sbin:/usr/sbin LANG=en_US.UTF-8
+WorkingDirectory=/root
+ExecStart=/usr/bin/tmux -u -f /usr/share/systemux/tmux.conf start

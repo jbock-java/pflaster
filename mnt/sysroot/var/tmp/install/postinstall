@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# General postinstall
+
+[[ -v installbase ]] || source /var/tmp/install/common.sh
+
+do_postinstall() {
+  run set_timezone || return
+  run create_users || return
+  run set_root_pw || return
+  run set_nopasswd || return
+  run configure_sdboot || return
+}
+
+return 2> /dev/null || {
+  do_postinstall
+}

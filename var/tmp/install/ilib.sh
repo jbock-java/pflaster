@@ -1,7 +1,5 @@
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
-source $installbase/partlib.sh
-
 mount_misc() {
   remount /dev || return
   remount /dev/pts || return
@@ -20,7 +18,7 @@ umount_misc() {
   uremount /run || return
 }
 
-postmount() {
+postmount_script() {
   local storage=$(get_profile storage)
   [[ $storage ]] || return
   local script=$installbase/storage/$storage/postmount
@@ -31,30 +29,38 @@ postmount() {
   $script
 }
 
-postgroups() {
-  local script=$installbase/postgroups
-  if [[ ! -f $script ]]; then
-    echo "File not found: $script"
-    return 0
-  fi
-  $script
-}
-
 mount_rootfs() {
-  local device
-  device=$(blkid --label $(get_label root)) || return
+  local label device storage vgname
+  storage=$(get_profile storage)
+  [[ $storage ]] || return
+  label=$(get_config ".storage.$storage.partition.root")
+  vgname=$(get_config ".storage.$storage.vgname")
+  if [[ $vgname ]]; then
+    label=$vgname-$label
+  fi
+  device=$(blkid --label $label) || return
   mount -m $device $sysroot
 }
 
 mount_home() {
-  local device
-  device=$(blkid --label $(get_label home)) || return
+  local label device storage vgname
+  storage=$(get_profile storage)
+  [[ $storage ]] || return
+  label=$(get_config ".storage.$storage.partition.home")
+  vgname=$(get_config ".storage.$storage.vgname")
+  if [[ $vgname ]]; then
+    label=$vgname-$label
+  fi
+  device=$(blkid --label $label) || return
   mount -m $device $sysroot/home
 }
 
 mount_efisys() {
-  local device
-  device=$(blkid --label $(get_label efi)) || return
+  local label device storage
+  storage=$(get_profile storage)
+  [[ $storage ]] || return
+  label=$(get_config ".storage.$storage.partition.efi")
+  device=$(blkid --label $label) || return
   mount --mkdir=0700 -o fmask=0077 -o dmask=0077 -o shortname=winnt $device $sysroot/boot/efi
 }
 
@@ -102,17 +108,16 @@ install_packages() {
 }
 
 install_more_packages() {
-  if [[ ! -f $installbase/install_more_packages ]]; then
-    echo "File not found: $installbase/install_more_packages"
-    return 0
-  fi
-  $installbase/install_more_packages
+  local software=$(get_profile software)
+  [[ $software ]] || return
+  run_chrooted $installbase/software/$software/install_more_packages
 }
 
 copy_common() {
   mkdir -p $sysroot$installbase
+  mkdir -p $sysroot/usr/bin
   cp $installbase/common.sh $sysroot$installbase || return
-  cp $installbase/config.json $sysroot$installbase
+  cp $installbase/config.json $sysroot$installbase || return
 }
 
 copy_profile() {
@@ -125,7 +130,7 @@ install_kernel() {
   dnf_install_rootfs kernel-modules-core-$(uname -r)
 }
 
-run_storage() {
+storage_script() {
   local storage=$(get_profile storage)
   [[ $storage ]] || return
   local script=$installbase/storage/$storage/storage
@@ -133,21 +138,34 @@ run_storage() {
   $script
 }
 
-run_preinstall() {
+run_hook_chrooted() {
   local storage=$(get_profile storage)
+  local software=$(get_profile software)
   [[ $storage ]] || return
-  local script=$installbase/storage/$storage/preinstall
-  [[ -f $script ]] || return
-  mkdir -p $(dirname $sysroot$script)
-  cp $script $sysroot$script
-  run_chrooted $script
+  [[ $software ]] || return
+  run_chrooted $installbase/$1
+  run_chrooted $installbase/storage/$storage/$1
+  run_chrooted $installbase/software/$software/$1
+}
+
+postgroups_chrooted() {
+  run_hook_chrooted postgroups
+}
+
+preinstall_chrooted() {
+  run_hook_chrooted preinstall
+}
+
+postinstall_chrooted() {
+  run_hook_chrooted postinstall
 }
 
 configure() {
   while :; do
-    choose storage || return
-    choose software || return
-    echo "Current config:"
+    configure_disk
+    choose storage
+    choose software
+    echo "Installation target: $(get_disk)"
     cat $installbase/profile.txt
     read -rp "Is this correct? [Y/n] "
     if [[ -z $REPLY ]] || [[ $REPLY =~ [yY] ]]; then
@@ -156,33 +174,51 @@ configure() {
   done
 }
 
+install_sdboot() {
+  findmnt -n $sysroot/boot/efi &> /dev/null || return
+  bootctl install --root=$sysroot --esp-path=/boot/efi
+}
+
+extract_late_tgz() {
+  tar --no-same-owner -xf /tmp/late.tgz --directory /
+  cp -r $sysroot/etc/yum.repos.d /etc/yum.repos.d
+}
+
+configure_hostname() {
+  local hostname="$(get_config .hostname)"
+  if [[ $hostname ]]; then
+    hostnamectl hostname $hostname
+  fi
+}
+
 do_everything() {
 
   # Preparations
   echo "Type 'C-b c stop' to halt after installation, or 'C-b c stop --now' to halt earlier."
-  run configure_disk || return
   run configure || return
-  run_storage || return
+  run storage_script || return
   run mount_rootfs || return
   run mount_home || return
   run mount_efisys || return
   run cleanup_boot_entries || return
-  run postmount || return
+  run extract_late_tgz || return
+  run postmount_script || return
+  run configure_hostname || return
 
   # Actual installation begins here
+  run mount_misc || return
   run copy_profile || return
+  run copy_common || return
   run install_groups || return
-  run postgroups || return
+  run postgroups_chrooted || return
   run remove_packages || return
   run install_packages || return
   run install_more_packages || return
-  run copy_common || return
   run configure_machine_id || return
-  run mount_misc || return
-  run_chrooted $installbase/install_sdboot || return
-  run_preinstall || return
+  run install_sdboot || return
+  run preinstall_chrooted || return
   run install_kernel || return
-  run_chrooted $installbase/postinstall || return
+  run postinstall_chrooted || return
   run umount_misc || return
   run copy_logs || return
   [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }

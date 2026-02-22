@@ -72,17 +72,22 @@ run_spawned() {
 }
 
 choose() {
-  local REPLY key options=()
-  if [[ -f $installbase/profile.txt ]] && grep -q -E "^$1=.*" $installbase/profile.txt; then
+  local what="$1" REPLY choice options=()
+  [[ $what ]] || return
+  choice=$(getarg pf.$what)
+  touch $installbase/profile.txt
+  sed -i -E "/^$what=.*/d" $installbase/profile.txt
+  if [[ $choice ]]; then
+    echo "$what=$choice" >> $installbase/profile.txt
+    echo "$what=$choice preselected"
     return 0
+  elif [[ -f $installbase/profile.txt ]] && grep -q -E "^$what=.*" $installbase/profile.txt; then
+    choice=$(sed -n -E "s|^$what=(.*)\\$|\\1|p" $installbase/profile.txt)
+    read -rp "$what=$choice <- keep this choice? [n/Y] "
+    [[ -z $REPLY || $REPLY =~ [yY] ]] && return 0
   fi
-  if key=$(getarg pf.$1); then
-    echo "$1=$key" >> $installbase/profile.txt
-    echo "Selection: $1=$key"
-    return 0
-  fi
-  for key in $(jq -r ".$1 | keys[]" $installbase/config.json); do
-    options+=($key)
+  for choice in $(jq -r ".$what | keys[]" $installbase/config.json); do
+    options+=($choice)
   done
   case ${#options[@]} in
     0)
@@ -90,36 +95,36 @@ choose() {
       return 1
       ;;
     1)
-      echo "$1=${options[@]}" >> $installbase/profile.txt
+      echo "$what=${options[@]}" >> $installbase/profile.txt
       return 0
       ;;
     *)
-      local width=0
-      for key in "${options[@]}"; do
-        width=$(( width > ${#key} ? width : ${#key} ))
+      local col=0
+      for choice in "${options[@]}"; do
+        (( col < ${#choice} && ( col = ${#choice} ) ))
       done
       while true; do
-        echo "${1}:"
-        for key in "${options[@]}"; do
-          printf "  %-$((width))s - %s\n" $key "$(jq -r .$1.$key.banner $installbase/config.json)"
+        echo "$what:"
+        for choice in "${options[@]}"; do
+          printf "  %-$((col))s - %s\n" $choice "$(jq -r .$what.$choice.banner $installbase/config.json)"
         done
-        read -rp "Choose $1 (prefix accepted): "
+        read -rp "Choose $what (or prefix): "
         [[ $REPLY ]] || continue
         local matches=0 remember
-        for key in "${options[@]}"; do
-          if [[ $key = ${REPLY}* ]]; then
+        for choice in "${options[@]}"; do
+          if [[ $choice = ${REPLY}* ]]; then
             (( matches++ ))
-            remember=$key
+            remember=$choice
           fi
         done
         if (( matches == 0 )); then
-          echo "No such $1: $REPLY"
+          echo "No such $what: $REPLY"
         elif (( matches == 1 )); then
-          echo "$1=$remember" >> $installbase/profile.txt
-          echo "Selection: $1=$remember"
+          echo "$what=$remember" >> $installbase/profile.txt
+          echo "$what=$remember selected"
           return 0
         else
-          echo "Multiple matches: $REPLY"
+          echo "Insufficient prefix: $REPLY"
         fi
       done
       ;;
@@ -183,14 +188,6 @@ get_config() {
 
 has_modifier() {
   jq -M -r '.modifiers[]' "$installbase/config.json" | grep -q "^$1$"
-}
-
-
-get_label() {
-  [[ $1 ]] || return
-  local storage=$(get_profile storage)
-  [[ $storage ]] || return
-  get_config ".storage.$storage.partition.$1"
 }
 
 configure_disk() {
@@ -277,4 +274,105 @@ get_only_child() {
   children=${children% }
   [[ $children = "${children// /}" ]] || return $(error "more than one child")
   echo $children
+}
+
+get_users() {
+  jq -r '.user | keys[]' "$installbase/config.json"
+}
+
+create_user() {
+  local user_exists user=$1
+  if [[ -e /home/$user ]]; then
+    user_exists=1
+  fi
+  if [[ $user_exists ]]; then
+    useradd -m -U -p "$(get_config .user.$user.password)" "$user"
+  else
+    useradd -U -p "$(get_config .user.$user.password)" "$user"
+  fi
+  if [[ $(get_config .user.$user.admin) = "true" ]]; then
+    usermod -a -G wheel "$user"
+  fi
+  if [[ $user_exists ]]; then
+    chown -R $user: /home/$user
+    return 0
+  fi
+  local sshkey
+  sshkey="$(get_config .user.$user.sshkey)"
+  if [[ ${sshkey:-null} != "null" ]]; then
+    mkdir -p /home/$user/.ssh
+    chmod 700 /home/$user/.ssh
+    echo "$sshkey" > /home/$user/.ssh/authorized_keys
+    chmod 600 /home/$user/.ssh/authorized_keys
+  fi
+  mkdir -p /home/$user/.bashrc.d
+  echo "alias ll='ls -lAZ --color=auto'" > /home/$user/.bashrc.d/aliases.sh
+  chown -R $user: /home/$user
+}
+
+create_users() {
+  local user users=$(get_users)
+  for user in "$users"; do
+    create_user $user
+  done
+}
+
+set_root_pw() {
+  local rootpw
+  rootpw=$(get_config .rootpw)
+  if [[ ${rootpw:-null} = "null" ]]; then
+    return 0
+  fi
+  chmod 600 /etc/shadow
+  sed -i -E "s@^root:\!unprovisioned:(.*)@root:$rootpw:\1@" /etc/shadow
+  chmod 000 /etc/shadow
+}
+
+trigger_autorelabel() {
+  touch /.autorelabel
+}
+
+set_enforcing() {
+  rpm --quiet -q selinux-policy || return 0
+  sed -i -E 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
+}
+
+set_nopasswd() {
+  chmod 640 /etc/sudoers
+  sed -i -E 's/^%wheel\b.*/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
+  chmod 440 /etc/sudoers
+}
+
+configure_sdboot() {
+  findmnt -n /boot/efi &> /dev/null || return
+  mkdir -p /boot/efi/loader
+  echo "timeout 30" >> /boot/efi/loader/loader.conf
+}
+
+set_timezone() {
+  # currently hardcoded, make this a config
+  timedatectl set-timezone Europe/Berlin
+}
+
+set_rtc_utc() {
+  timedatectl set-local-rtc 0
+}
+
+set_target_multi_user() {
+  systemctl set-default multi-user.target
+}
+
+set_target_graphical() {
+  systemctl set-default graphical.target
+}
+
+set_target_systemux() {
+  [[ -f /usr/share/systemux/tmux.conf ]] || return
+  local software=$(get_profile software)
+  [[ $software ]] || return
+  sed -i -E "s@\\bFIRSTBOOT_SCRIPT\\b@/var/tmp/install/software/$software/firstboot@" /usr/share/systemux/tmux.conf
+  if rpm --quiet -q selinux-policy; then
+    sed -i -E 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+  fi
+  systemctl set-default systemux.target
 }
