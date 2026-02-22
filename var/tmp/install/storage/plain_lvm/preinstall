@@ -3,7 +3,7 @@
 # This runs chrooted.
 # Preinstall means right before ""kernel"" install.
 
-[[ -v installbase ]] || source /tmp/install/common.sh
+[[ -v installbase ]] || source /var/tmp/install/common.sh
 
 print_fstab() {
   local label_home label_root label_efi

@@ -1,0 +1,8 @@
+[Unit]
+Description=systemux
+Requires=basic.target
+AllowIsolate=yes
+After=network-online.target plymouth-quit-wait.service
+Wants=plymouth-quit.service
+Wants=systemux.service
+Wants=chronyd.service

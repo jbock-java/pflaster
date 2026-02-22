@@ -1,0 +1,22 @@
+#!/bin/bash
+#
+# Some things don't work in a chroot, so do them here.
+
+[[ -v installbase ]] || source /var/tmp/install/common.sh
+
+firstboot_script() {
+  run set_timezone || return
+  run set_enforcing || return
+  run set_target_anyboot || return
+  [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
+  systemctl reboot
+}
+
+return 2> /dev/null || {
+  echo Running: $0
+  set -o pipefail
+  mkdir -p /var/log/pflaster
+  firstboot_script 2>&1 | tee /var/log/pflaster/firstboot.txt
+}
+
+:

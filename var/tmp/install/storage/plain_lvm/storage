@@ -4,7 +4,7 @@
 # Its job is to make sure that the partitions named in the profile config exist,
 # are formatted and labeled, but not mounted yet.
 
-[[ -v installbase ]] || source /tmp/install/common.sh
+[[ -v installbase ]] || source /var/tmp/install/common.sh
 
 get_pvrootsize() {
   local disksize efisize=2044

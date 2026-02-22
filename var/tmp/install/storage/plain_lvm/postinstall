@@ -2,7 +2,7 @@
 #
 # This runs chrooted, after kernel install.
 
-[[ -v installbase ]] || source /tmp/install/common.sh
+[[ -v installbase ]] || source /var/tmp/install/common.sh
 
 get_users() {
   jq -r '.user | keys[]' "$installbase/config.json"

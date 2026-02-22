@@ -20,7 +20,7 @@ umount_misc() {
   uremount /run || return
 }
 
-postmount() {
+postmount_script() {
   local storage=$(get_profile storage)
   [[ $storage ]] || return
   local script=$installbase/storage/$storage/postmount
@@ -125,7 +125,7 @@ install_kernel() {
   dnf_install_rootfs kernel-modules-core-$(uname -r)
 }
 
-run_storage() {
+storage_script() {
   local storage=$(get_profile storage)
   [[ $storage ]] || return
   local script=$installbase/storage/$storage/storage
@@ -133,14 +133,16 @@ run_storage() {
   $script
 }
 
-run_preinstall() {
+preinstall_chrooted() {
   local storage=$(get_profile storage)
   [[ $storage ]] || return
-  local script=$installbase/storage/$storage/preinstall
-  [[ -f $script ]] || return
-  mkdir -p $(dirname $sysroot$script)
-  cp $script $sysroot$script
-  run_chrooted $script
+  run_chrooted $sysroot$installbase/storage/$storage/preinstall
+}
+
+postinstall_chrooted() {
+  local software=$(get_profile software)
+  [[ $software ]] || return
+  run_chrooted $sysroot$installbase/software/$software/postinstall
 }
 
 configure() {
@@ -156,18 +158,23 @@ configure() {
   done
 }
 
+install_sdboot() {
+  findmnt -n $sysroot/boot/efi &> /dev/null || return
+  bootctl install --root=$sysroot --esp-path=/boot/efi
+}
+
 do_everything() {
 
   # Preparations
   echo "Type 'C-b c stop' to halt after installation, or 'C-b c stop --now' to halt earlier."
   run configure_disk || return
   run configure || return
-  run_storage || return
+  run storage_script || return
   run mount_rootfs || return
   run mount_home || return
   run mount_efisys || return
   run cleanup_boot_entries || return
-  run postmount || return
+  run postmount_script || return
 
   # Actual installation begins here
   run copy_profile || return
@@ -179,10 +186,10 @@ do_everything() {
   run copy_common || return
   run configure_machine_id || return
   run mount_misc || return
-  run_chrooted $installbase/install_sdboot || return
-  run_preinstall || return
+  run install_sdboot || return
+  run preinstall_chrooted || return
   run install_kernel || return
-  run_chrooted $installbase/postinstall || return
+  run postinstall_chrooted || return
   run umount_misc || return
   run copy_logs || return
   [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }

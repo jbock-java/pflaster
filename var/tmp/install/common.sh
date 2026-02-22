@@ -278,3 +278,82 @@ get_only_child() {
   [[ $children = "${children// /}" ]] || return $(error "more than one child")
   echo $children
 }
+
+enable_firstboot() {
+  [[ -f /usr/share/systemux/tmux.conf ]] || return
+  local software=$(get_profile software)
+  [[ $software ]] || return
+  sed -i -E "s@\\bFIRSTBOOT_SCRIPT\\b@/var/tmp/install/software/$software/firstboot@" /usr/share/systemux/tmux.conf
+  systemctl set-default systemux.target
+}
+
+get_users() {
+  jq -r '.user | keys[]' "$installbase/config.json"
+}
+
+create_user() {
+  local user_exists user=$1
+  if [[ -e /home/$user ]]; then
+    user_exists=1
+  fi
+  if [[ $user_exists ]]; then
+    useradd -m -U -p "$(get_config .user.$user.password)" "$user"
+  else
+    useradd -U -p "$(get_config .user.$user.password)" "$user"
+  fi
+  if [[ $(get_config .user.$user.admin) = "true" ]]; then
+    usermod -a -G wheel "$user"
+  fi
+  if [[ $user_exists ]]; then
+    chown -R $user: /home/$user
+    return 0
+  fi
+  local sshkey
+  sshkey="$(get_config .user.$user.sshkey)"
+  if [[ ${sshkey:-null} != "null" ]]; then
+    mkdir -p /home/$user/.ssh
+    chmod 700 /home/$user/.ssh
+    echo "$sshkey" > /home/$user/.ssh/authorized_keys
+    chmod 600 /home/$user/.ssh/authorized_keys
+  fi
+  mkdir -p /home/$user/.bashrc.d
+  echo "alias ll='ls -lAZ --color=auto'" > /home/$user/.bashrc.d/aliases.sh
+  chown -R $user: /home/$user
+}
+
+create_users() {
+  local user users=$(get_users)
+  for user in "$users"; do
+    create_user $user
+  done
+}
+
+set_root_pw() {
+  local rootpw
+  rootpw=$(get_config .rootpw)
+  if [[ ${rootpw:-null} = "null" ]]; then
+    return 0
+  fi
+  chmod 600 /etc/shadow
+  sed -i -E "s@^root:\!unprovisioned:(.*)@root:$rootpw:\1@" /etc/shadow
+  chmod 000 /etc/shadow
+}
+
+set_enforcing() {
+  rpm --quiet -q selinux-policy || return 0
+  sed -i -E 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
+  touch /.autorelabel
+}
+
+set_target_anyboot() {
+  if rpm --quiet -q sddm; then
+    systemctl set-default graphical.target || return
+  else
+    systemctl set-default multi-user.target || return
+  fi
+}
+
+set_timezone() {
+  # currently hardcoded, make this a config
+  timedatectl set-timezone Europe/Berlin
+}

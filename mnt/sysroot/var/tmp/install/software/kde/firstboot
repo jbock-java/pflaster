@@ -4,7 +4,7 @@
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
-install_more_stuff() {
+install_kde() {
   local groups=(
     kde-desktop
     fonts
@@ -23,38 +23,20 @@ install_more_stuff() {
       group install "${groups[@]}"
 }
 
-set_enforcing() {
-  rpm --quiet -q selinux-policy || return 0
-  sed -i -E 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
-  touch /.autorelabel
-}
-
-# change the target so pfirstboot won't run again
-set_target() {
-  if rpm --quiet -q sddm; then
-    systemctl set-default graphical.target || return
-  else
-    systemctl set-default multi-user.target || return
-  fi
-}
-
-set_timezone() {
-  # currently hardcoded, make this a config
-  timedatectl set-timezone Europe/Berlin
-}
-
-pfirstboot() {
+firstboot_script() {
   run set_timezone || return
-  run install_more_stuff || return
+  run install_kde || return
   run set_enforcing || return
-  run set_target || return
+  run set_target_anyboot || return
   [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
   systemctl reboot
 }
 
 return 2> /dev/null || {
   echo Running: $0
-  pfirstboot
+  set -o pipefail
+  mkdir -p /var/log/pflaster
+  firstboot_script 2>&1 | tee /var/log/pflaster/firstboot.txt
 }
 
 :
