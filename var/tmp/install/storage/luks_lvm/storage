@@ -109,7 +109,7 @@ wipe() {
     if [[ $REPLY =~ [yY] ]]; then
       break
     elif [[ $REPLY =~ [nN] ]]; then
-      echo "I sleep."
+      echo "Installation halted."
       sleep inf
     fi
   done

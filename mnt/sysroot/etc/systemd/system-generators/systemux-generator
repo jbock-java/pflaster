@@ -1,0 +1,6 @@
+#!/bin/bash
+
+target_dir="$1/ofd-firstboot.target.wants"
+mkdir -p "$target_dir"
+tty=$(< /sys/class/tty/console/active)
+ln -s "/usr/lib/systemd/system/systemux-tmux@.service" "$target_dir/systemux-tmux@${tty##* }.service"

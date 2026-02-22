@@ -136,20 +136,21 @@ storage_script() {
 preinstall_chrooted() {
   local storage=$(get_profile storage)
   [[ $storage ]] || return
-  run_chrooted $sysroot$installbase/storage/$storage/preinstall
+  run_chrooted $installbase/storage/$storage/preinstall
 }
 
 postinstall_chrooted() {
   local software=$(get_profile software)
   [[ $software ]] || return
-  run_chrooted $sysroot$installbase/software/$software/postinstall
+  run_chrooted $installbase/software/$software/postinstall
 }
 
 configure() {
   while :; do
-    choose storage || return
-    choose software || return
-    echo "Current config:"
+    configure_disk
+    choose storage
+    choose software
+    echo "Installation target: $(get_disk)"
     cat $installbase/profile.txt
     read -rp "Is this correct? [Y/n] "
     if [[ -z $REPLY ]] || [[ $REPLY =~ [yY] ]]; then
@@ -167,7 +168,6 @@ do_everything() {
 
   # Preparations
   echo "Type 'C-b c stop' to halt after installation, or 'C-b c stop --now' to halt earlier."
-  run configure_disk || return
   run configure || return
   run storage_script || return
   run mount_rootfs || return

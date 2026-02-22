@@ -4,7 +4,7 @@ name=Fedora $releasever - $basearch
 metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-$releasever&arch=$basearch
 enabled=1
 countme=0
-metadata_expire=6h
+metadata_expire=7d
 repo_gpgcheck=0
 type=rpm
 gpgcheck=1
@@ -16,7 +16,7 @@ name=Fedora $releasever - $basearch - Debug
 #baseurl=http://download.example/pub/fedora/linux/releases/$releasever/Everything/$basearch/debug/tree/
 metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-debug-$releasever&arch=$basearch
 enabled=0
-metadata_expire=6h
+metadata_expire=7d
 repo_gpgcheck=0
 type=rpm
 gpgcheck=1
@@ -28,7 +28,7 @@ name=Fedora $releasever - Source
 #baseurl=http://download.example/pub/fedora/linux/releases/$releasever/Everything/source/tree/
 metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-source-$releasever&arch=$basearch
 enabled=0
-metadata_expire=6h
+metadata_expire=7d
 repo_gpgcheck=0
 type=rpm
 gpgcheck=1

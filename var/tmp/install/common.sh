@@ -72,17 +72,18 @@ run_spawned() {
 }
 
 choose() {
-  local REPLY key options=()
-  if [[ -f $installbase/profile.txt ]] && grep -q -E "^$1=.*" $installbase/profile.txt; then
+  local what="$1" REPLY choice options=()
+  [[ $what ]] || return
+  if [[ -f $installbase/profile.txt ]] && grep -q -E "^$what=.*" $installbase/profile.txt; then
     return 0
   fi
-  if key=$(getarg pf.$1); then
-    echo "$1=$key" >> $installbase/profile.txt
-    echo "Selection: $1=$key"
+  if choice=$(getarg pf.$what); then
+    echo "$what=$choice" >> $installbase/profile.txt
+    echo "$what=$choice preselected"
     return 0
   fi
-  for key in $(jq -r ".$1 | keys[]" $installbase/config.json); do
-    options+=($key)
+  for choice in $(jq -r ".$what | keys[]" $installbase/config.json); do
+    options+=($choice)
   done
   case ${#options[@]} in
     0)
@@ -90,36 +91,36 @@ choose() {
       return 1
       ;;
     1)
-      echo "$1=${options[@]}" >> $installbase/profile.txt
+      echo "$what=${options[@]}" >> $installbase/profile.txt
       return 0
       ;;
     *)
-      local width=0
-      for key in "${options[@]}"; do
-        width=$(( width > ${#key} ? width : ${#key} ))
+      local col=0
+      for choice in "${options[@]}"; do
+        (( col < ${#choice} && ( col = ${#choice} ) ))
       done
       while true; do
-        echo "${1}:"
-        for key in "${options[@]}"; do
-          printf "  %-$((width))s - %s\n" $key "$(jq -r .$1.$key.banner $installbase/config.json)"
+        echo "$what:"
+        for choice in "${options[@]}"; do
+          printf "  %-$((col))s - %s\n" $choice "$(jq -r .$what.$choice.banner $installbase/config.json)"
         done
-        read -rp "Choose $1 (prefix accepted): "
+        read -rp "Choose $what (or prefix): "
         [[ $REPLY ]] || continue
         local matches=0 remember
-        for key in "${options[@]}"; do
-          if [[ $key = ${REPLY}* ]]; then
+        for choice in "${options[@]}"; do
+          if [[ $choice = ${REPLY}* ]]; then
             (( matches++ ))
-            remember=$key
+            remember=$choice
           fi
         done
         if (( matches == 0 )); then
-          echo "No such $1: $REPLY"
+          echo "No such $what: $REPLY"
         elif (( matches == 1 )); then
-          echo "$1=$remember" >> $installbase/profile.txt
-          echo "Selection: $1=$remember"
+          echo "$what=$remember" >> $installbase/profile.txt
+          echo "$what=$remember selected"
           return 0
         else
-          echo "Multiple matches: $REPLY"
+          echo "Insufficient prefix: $REPLY"
         fi
       done
       ;;

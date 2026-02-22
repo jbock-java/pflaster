@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+# If this exists, it runs unchrooted,
+# after dnf groups have been installed.
+
+[[ -v installbase ]] || source /var/tmp/install/common.sh
+
+disable_cisco() {
+  if [[ -f $sysroot/etc/yum.repos.d/fedora-cisco-openh264.repo ]]; then
+    sed -i -E \
+      -e "s|^enabled=.*|enabled=0|" \
+      -e "s|^enabled_metadata=.*|enabled_metadata=0|" \
+      $sysroot/etc/yum.repos.d/fedora-cisco-openh264.repo
+  fi
+}
+
+postgroups() {
+  run disable_cisco || return
+}
+
+return 2> /dev/null || {
+  postgroups
+}
