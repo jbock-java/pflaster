@@ -163,6 +163,18 @@ install_sdboot() {
   bootctl install --root=$sysroot --esp-path=/boot/efi
 }
 
+extract_late_tgz() {
+  tar --no-same-owner -xf /tmp/late.tgz --directory /
+  cp -r $sysroot/etc/yum.repos.d /etc/yum.repos.d
+}
+
+configure_hostname() {
+  # make this a config
+  local hostname="$(get_config .hostname)"
+  [[ $hostname ]] || return
+  hostnamectl hostname $hostname
+}
+
 do_everything() {
 
   # Preparations
@@ -173,7 +185,9 @@ do_everything() {
   run mount_home || return
   run mount_efisys || return
   run cleanup_boot_entries || return
+  run extract_late_tgz || return
   run postmount_script || return
+  run configure_hostname || return
 
   # Actual installation begins here
   run mount_misc || return

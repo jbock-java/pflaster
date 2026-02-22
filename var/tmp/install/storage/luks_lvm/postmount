@@ -1,9 +1,7 @@
 #!/bin/bash
 #
 # A profile may or may not have this file.
-# If it exists, it runs unchrooted,
-# between "sysroot" mount and kernel install.
-# dnf is already configured at this point.
+# If it exists, it runs after "sysroot" is mounted.
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
@@ -13,26 +11,8 @@ copy_lukskey() {
   cp $installbase/lukskey $sysroot$installbase
 }
 
-configure_hostname() {
-  # make this a config
-  local hostname="$(get_config .hostname)"
-  [[ $hostname ]] || return
-  hostnamectl hostname $hostname
-}
-
-extract_late_tgz() {
-  tar --no-same-owner -xf /tmp/late.tgz --directory /
-}
-
-copy_bootstrapped_yum_config() {
-  cp -r $sysroot/etc/yum.repos.d /etc/yum.repos.d
-}
-
 postmount() {
-  run extract_late_tgz || return
-  run copy_bootstrapped_yum_config || return
   run copy_lukskey || return
-  run configure_hostname || return
 }
 
 return 2> /dev/null || {

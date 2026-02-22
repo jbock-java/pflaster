@@ -58,11 +58,12 @@ create_partitions() {
   luksroot=$(get_only_child $pvroot) || return
   pvcreate $luksroot || return
   vgcreate luks $luksroot || return
-  rootsize=$(( pvrootsize / 2 ))
-  rootsize=$(( rootsize > 65536 ? 65536 : rootsize ))
-  rootsize=$(( rootsize < 8192 ? 8192 : rootsize ))
-  homesize=$(( pvrootsize - rootsize - 32 ))
-  homesize=$(( homesize > 65536 ? 65536 : homesize ))
+  (( rootsize = pvrootsize / 2 ))
+  (( rootsize > 65536 && ( rootsize = 65536 ) ))
+  (( rootsize < 8192 && ( rootsize = 8192 ) ))
+  (( homesize = pvrootsize - rootsize - 32 ))
+  (( homesize > 65536 && ( homesize = 65536 ) ))
+  (( homesize >= 1024 )) || return
   lvcreate -L ${rootsize}M -n ${label_root#luks-} luks || return
   lvcreate -L ${homesize}M -n ${label_home#luks-} luks || return
   mkfs.ext4 -q -L $label_root /dev/mapper/$label_root <<< y || return

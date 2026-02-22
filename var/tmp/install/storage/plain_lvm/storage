@@ -24,32 +24,38 @@ print_parted_commands() {
   (( pos += pvrootsize ))
 }
 
-create_partitions() {
-  local disk part pvroot rootsize homesize label_home label_root label_efi
+wipe() {
+  local disk part pvroot rootsize homesize label_home label_root label_efi volgs
+  local pvrootsize=$(get_pvrootsize)
+  vgchange -an
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
   label_root=$(get_config .storage.plain_lvm.partition.root) || return
   label_efi=$(get_config .storage.plain_lvm.partition.efi) || return
   [[ $label_home = linux-* ]] || return $(error "invalid label: $label_home")
   [[ $label_root = linux-* ]] || return $(error "invalid label: $label_root")
-  disk=$(get_disk) || return $(error "get_disk")
+  disk=$(get_disk) || return
   parted --script --align optimal $disk -- $(print_parted_commands) || return 
   mkfs.vfat -n $label_efi -F 32 $(by_partlabel EFISYS) || return
-  pvroot=$(by_partlabel pvroot)
+  pvroot=$(by_partlabel pvroot) || return
+  volgs=$(vgs --noheadings | sed -E 's/^\s*\b(\S+)\b.*/\1/')
+  if [[ $volgs = "linux" ]]; then
+    vgremove -f linux
+  fi
   pvcreate $pvroot || return
   vgcreate linux $pvroot || return
-  rootsize=$(( pvrootsize / 2 ))
-  rootsize=$(( rootsize > 65536 ? 65536 : rootsize ))
-  rootsize=$(( rootsize < 8192 ? 8192 : rootsize ))
-  homesize=$(( pvrootsize - rootsize - 32 ))
-  homesize=$(( homesize > 65536 ? 65536 : homesize ))
-  lvcreate -L ${rootsize:-8192}M -n ${label_root#linux-} linux || return
-  lvcreate -L ${homesize:-2048}M -n ${label_home#linux-} linux || return
+  (( rootsize = pvrootsize / 2 ))
+  (( rootsize > 65536 && ( rootsize = 65536 ) ))
+  (( rootsize < 8192 && ( rootsize = 8192 ) ))
+  (( homesize = pvrootsize - rootsize - 32 ))
+  (( homesize > 65536 && ( homesize = 65536 ) ))
+  (( homesize >= 1024 )) || return
+  lvcreate -L ${rootsize}M -n ${label_root#linux-} linux || return
+  lvcreate -L ${homesize}M -n ${label_home#linux-} linux || return
   mkfs.ext4 -q -L $label_root /dev/mapper/$label_root <<< y || return
   mkfs.ext4 -q -L $label_home /dev/mapper/$label_home <<< y || return
 }
 
-format_root() {
-  [[ -f $installbase/lukskey ]] || return 1
+only_format_root() {
   local efisys label_home label_root label_efi
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
   label_root=$(get_config .storage.plain_lvm.partition.root) || return
@@ -63,25 +69,20 @@ format_root() {
 }
 
 prepare_partitions() {
-  local label_home
+  local label_home REPLY
   vgchange -ay
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
   if blkid --label $label_home &> /dev/null; then
+    # todo: ask if wipe desired
+    only_format_root
+  else
     while true; do
       read -rp "Erase all data on $(get_disk)? [y/N] "
       [[ $REPLY =~ [yY] ]] && break
-      [[ $REPLY =~ [nN] ]] && { echo "I sleep." ; sleep inf ; }
+      [[ $REPLY =~ [nN] ]] && { echo "Installation halted." ; sleep inf ; }
     done
-    format_root
-    return
+    wipe
   fi
-  local REPLY
-  while true; do
-    read -rp "Erase all data on $(get_disk)? [y/N] "
-    [[ $REPLY =~ [yY] ]] && break
-    [[ $REPLY =~ [nN] ]] && { echo "I sleep." ; sleep inf ; }
-  done
-  create_partitions
 }
 
 return 2> /dev/null || {

@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+# This runs chrooted.
+# Preinstall means right before ""kernel"" install.
+
+[[ -v installbase ]] || source /var/tmp/install/common.sh
+
+print_fstab() {
+  local label_home label_root label_efi
+  label_home=$(get_config .storage.plain_lvm.partition.home)
+  label_root=$(get_config .storage.plain_lvm.partition.root)
+  label_efi=$(get_config .storage.plain_lvm.partition.efi)
+  uuid_efi=$(get_uuid $label_efi)
+  uuid_root=$(get_uuid $label_root)
+  uuid_home=$(get_uuid $label_home)
+  [[ $uuid_efi ]] || return
+  [[ $uuid_root ]] || return
+  [[ $uuid_home ]] || return
+  echo "UUID=$uuid_efi  /boot/efi vfat umask=0077,shortname=winnt 0 2"
+  echo "UUID=$uuid_root /         ext4 defaults 1 2"
+  echo "UUID=$uuid_home /home     ext4 defaults 1 2"
+}
+
+configure_fstab() {
+  mkdir -p /etc
+  print_fstab >> /etc/fstab
+}
+
+print_cmdline_options() {
+  local label_root
+  label_root=$(get_config .storage.plain_lvm.partition.root)
+  uuid_root=$(get_uuid $label_root)
+  [[ $uuid_root ]] || return
+  echo "root=UUID=$uuid_root"
+  echo "rd.lvm.vg=linux"
+  echo "rd.shell"
+}
+
+configure_cmdline() {
+  mkdir -p /etc/kernel
+  local options=$(print_cmdline_options | tr '\n' ' ')
+  echo ${options% } > /etc/kernel/cmdline
+}
+
+do_prepare() {
+  run configure_fstab || return
+  run configure_cmdline || return
+}
+
+return 2> /dev/null || {
+  do_prepare
+}
