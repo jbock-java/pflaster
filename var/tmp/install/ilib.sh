@@ -31,13 +31,10 @@ postmount_script() {
   $script
 }
 
-postgroups() {
-  local script=$installbase/postgroups
-  if [[ ! -f $script ]]; then
-    echo "File not found: $script"
-    return 0
-  fi
-  $script
+postgroups_chrooted() {
+  local software=$(get_profile software)
+  [[ $software ]] || return
+  run_chrooted $installbase/software/$software/postgroups
 }
 
 mount_rootfs() {
@@ -177,15 +174,15 @@ do_everything() {
   run postmount_script || return
 
   # Actual installation begins here
+  run mount_misc || return
   run copy_profile || return
   run install_groups || return
-  run postgroups || return
+  run postgroups_chrooted || return
   run remove_packages || return
   run install_packages || return
   run install_more_packages || return
   run copy_common || return
   run configure_machine_id || return
-  run mount_misc || return
   run install_sdboot || return
   run preinstall_chrooted || return
   run install_kernel || return
