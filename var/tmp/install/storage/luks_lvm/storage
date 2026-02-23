@@ -121,12 +121,12 @@ unlock_home_and_format_root() {
   [[ -e /dev/mapper/$vgname-$label_home ]] || return
   if [[ -e /dev/mapper/$vgname-$label_root ]]; then
     mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
-    e2label /dev/mapper/$vgname-$label_home $vgname-$label_home || return
   else
     rootsize=$(sensible_rootsize) || return
     lvcreate -L ${rootsize}M -n $label_root $vgname || return
     mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
   fi
+  e2label /dev/mapper/$vgname-$label_home $vgname-$label_home || return
   mkfs.vfat -n $label_efi -F 32 $efisys || return
 }
 

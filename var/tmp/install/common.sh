@@ -32,7 +32,6 @@ run() {
   if [[ -f /tmp/pause ]]; then
     echo "Halted. 'stop -c' to continue."
     sleep inf
-    rm -f /tmp/pause
   fi
   echo "OK: $1"
 }
@@ -47,9 +46,8 @@ run_chrooted() {
   fi
   chroot $sysroot $1 || return $(error "chroot $sysroot $1")
   if [[ -f /tmp/pause ]]; then
-    echo "Installation is halted. Type 'stop -c' to continue."
+    echo "Paused after $1. Type 'stop -c' to continue."
     sleep inf
-    rm -f /tmp/pause
   fi
   echo "OK: chroot $sysroot $1"
 }
@@ -285,10 +283,20 @@ create_user() {
   if [[ -e /home/$user ]]; then
     user_exists=1
   fi
+  local system=$(get_config .user.$user.system)
+  # this is not very elegant ^^
   if [[ $user_exists ]]; then
-    useradd -m -U -p "$(get_config .user.$user.password)" "$user"
+    if [[ $system ]]; then
+      useradd -m -U --system -p "$(get_config .user.$user.password)" "$user"
+    else
+      useradd -m -U -p "$(get_config .user.$user.password)" "$user"
+    fi
   else
-    useradd -U -p "$(get_config .user.$user.password)" "$user"
+    if [[ $system ]]; then
+      useradd -U --system -p "$(get_config .user.$user.password)" "$user"
+    else
+      useradd -U -p "$(get_config .user.$user.password)" "$user"
+    fi
   fi
   if [[ $(get_config .user.$user.admin) = "true" ]]; then
     usermod -a -G wheel "$user"

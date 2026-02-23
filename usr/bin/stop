@@ -13,20 +13,22 @@ if [[ $1 = "-c" || $1 = "--continue" ]]; then
   if [[ $pid ]]; then
     pid=${pid%% *}
     kill $pid
-    echo "OK, killed $pid"
   else
+    echo "no such process"
     rm -f /tmp/pause /tmp/stop
-    echo "Installer will not halt after installation or after current step."
   fi
-elif [[ $1 = "--now" ]]; then
-  touch /tmp/pause
-  touch /tmp/stop
+elif [[ $1 = "-p" || $1 = "--pause" ||$1 = "-s" || $1 = "--step" || $1 = "-n" || $1 = "--now" ]]; then
+  touch /tmp/pause /tmp/stop
   echo "Installer will halt after installation, and after the current step."
   print_usage
 elif [[ -z $1 ]]; then
   touch /tmp/stop
   echo "Installer will halt after installation."
   print_usage
+elif [[ $1 = "--unpause" ]]; then
+  rm -f /tmp/pause
+elif [[ $1 = "--unstop" ]]; then
+  rm -f /tmp/pause /tmp/stop
 else
   echo "[ERROR] Unknown token: $1"
 fi
