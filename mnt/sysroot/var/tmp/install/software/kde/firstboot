@@ -7,9 +7,17 @@ install_kde() {
     kde-desktop
     fonts
     base-graphical
+    hardware-support
+    standard
+    networkmanager-submodules
+    admin-tools
+    multimedia
   )
   echo "dnf install group ${groups[@]}"
   dnf -qy --color=never \
+      -x PackageKit-command-not-found \
+      -x ksshaskpass \
+      -x plasma-welcome \
       -x grub2-common \
       -x grub2-pc \
       -x grub2-pc-modules \
