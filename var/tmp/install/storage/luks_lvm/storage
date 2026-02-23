@@ -77,7 +77,7 @@ create_partitions() {
 ask_existing_lukskey() {
   local REPLY pvroot pvname
   pvname=$(get_config .storage.luks_lvm.pvname) || return
-  pvroot=$(blkid --label $pvname 2> /dev/null) || return
+  pvroot=$(blkid --label $pvname) || return
   echo "Found $pvname: $pvroot"
   read -rsp "Enter lukskey, or leave empty to wipe: "
   echo
@@ -91,9 +91,10 @@ ask_existing_lukskey() {
 }
 
 sensible_rootsize() {
-  local pvrootsize homesize label_home
-  blkid --label $vgname-$label_home &> /dev/null || return
+  local pvrootsize homesize vgname label_home
+  vgname=$(get_config .storage.luks_lvm.vgname) || return
   label_home=$(get_config .storage.luks_lvm.partition.home) || return
+  [[ -e /dev/mapper/$vgname-$label_home ]] || return
   pvrootsize=$(get_pvrootsize)
   homesize=$(lvs --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_home\").lv_size" | sed -E 's/^(.*)B$/\1/')
   (( homesize /= ( 1024 * 1024 ) ))
@@ -114,13 +115,13 @@ unlock_home_and_format_root() {
   label_root=$(get_config .storage.luks_lvm.partition.root) || return
   label_efi=$(get_config .storage.luks_lvm.partition.efi) || return
   efisys=$(blkid --label $label_efi) || return
-  pvroot=$(blkid --label $pvname 2> /dev/null) || return
+  pvroot=$(blkid --label $pvname) || return
   cryptsetup luksOpen -q --disable-external-tokens --key-file $installbase/lukskey $pvroot $vgname || return
   vgchange -ay
-  blkid --label $vgname-$label_home || return
-  luksroot=$(blkid --label $vgname-$label_root 2> /dev/null)
-  if [[ $luksroot ]]; then
-    mkfs.ext4 -q -L $vgname-$label_root $luksroot <<< y || return
+  [[ -e /dev/mapper/$vgname-$label_home ]] || return
+  if [[ -e /dev/mapper/$vgname-$label_root ]]; then
+    mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
+    e2label /dev/mapper/$vgname-$label_home $vgname-$label_home || return
   else
     rootsize=$(sensible_rootsize) || return
     lvcreate -L ${rootsize}M -n $label_root $vgname || return
