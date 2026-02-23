@@ -58,7 +58,7 @@ create_partitions() {
   cryptsetup config $pvroot --label $pvname || return
   luksroot=$(get_only_child $pvroot) || return
   pvcreate $luksroot || return
-  vgcreate luks $luksroot || return
+  vgcreate $vgname $luksroot || return
   (( rootsize = pvrootsize / 2 ))
   (( rootsize > 65536 && ( rootsize = 65536 ) ))
   (( rootsize < 8192 && ( rootsize = 8192 ) ))

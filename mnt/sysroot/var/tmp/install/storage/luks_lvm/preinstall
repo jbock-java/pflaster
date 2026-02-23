@@ -50,7 +50,7 @@ print_cmdline_options() {
 configure_cmdline() {
   local options
   mkdir -p /etc/kernel
-  options=$(print_cmdline_options | tr '\n' ' ') || return
+  options=$(print_cmdline_options | tr '\n' ' ')
   echo ${options% } > /etc/kernel/cmdline
 }
 

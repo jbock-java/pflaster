@@ -337,6 +337,11 @@ set_enforcing() {
   sed -i -E 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
 }
 
+set_permissive() {
+  rpm --quiet -q selinux-policy || return 0
+  sed -i -E 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+}
+
 set_nopasswd() {
   chmod 640 /etc/sudoers
   sed -i -E 's/^%wheel\b.*/%wheel ALL=(ALL) NOPASSWD: ALL/' /etc/sudoers
@@ -371,8 +376,6 @@ set_target_systemux() {
   local software=$(get_profile software)
   [[ $software ]] || return
   sed -i -E "s@\\bFIRSTBOOT_SCRIPT\\b@/var/tmp/install/software/$software/firstboot@" /usr/share/systemux/tmux.conf
-  if rpm --quiet -q selinux-policy; then
-    sed -i -E 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
-  fi
   systemctl set-default systemux.target
+  set_permissive
 }
