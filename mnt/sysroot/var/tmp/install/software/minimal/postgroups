@@ -1,7 +1,6 @@
 #!/bin/bash
 #
-# If this exists, it runs chrooted,
-# after dnf groups have been installed.
+# chrooted
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 

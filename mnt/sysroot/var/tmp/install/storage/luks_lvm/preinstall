@@ -1,13 +1,15 @@
 #!/bin/bash
 #
-# This runs chrooted.
-# Preinstall means right before ""kernel"" install.
+# chrooted
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
 configure_crypttab() {
   mkdir -p /etc
-  echo "luks UUID=$(get_uuid pvroot) none discard,tpm2-device=auto" > /etc/crypttab
+  local pvname uuid_pvroot
+  pvname=$(get_config .storage.luks_lvm.pvname) || return
+  uuid_pvroot=$(get_uuid $pvname)
+  echo "luks UUID=$uuid_pvroot none discard,tpm2-device=auto" > /etc/crypttab
 }
 
 print_fstab() {
@@ -33,12 +35,13 @@ configure_fstab() {
 }
 
 print_cmdline_options() {
-  local uuid_root label_root
+  local uuid_root uuid_pvroot label_root pvname vgname
   label_root=$(get_config .storage.luks_lvm.partition.root)
+  pvname=$(get_config .storage.luks_lvm.pvname) || return
   vgname=$(get_config .storage.luks_lvm.vgname)
   [[ $vgname ]] || return
   uuid_root=$(get_uuid $vgname-$label_root)
-  uuid_pvroot=$(get_uuid pvroot)
+  uuid_pvroot=$(get_uuid $pvname)
   [[ $uuid_root ]] || return
   [[ $uuid_pvroot ]] || return
   echo "root=UUID=$uuid_root"

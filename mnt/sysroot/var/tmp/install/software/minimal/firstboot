@@ -1,6 +1,4 @@
 #!/bin/bash
-#
-# Some things don't work in a chroot, so do them here.
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 

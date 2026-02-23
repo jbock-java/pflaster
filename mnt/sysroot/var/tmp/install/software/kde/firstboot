@@ -1,6 +1,4 @@
 #!/bin/bash
-#
-# Some things don't work in a chroot, so do them here.
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
@@ -28,7 +26,6 @@ firstboot_script() {
   run set_enforcing || return
   run trigger_autorelabel || return
   run set_target_graphical || return
-  [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
   systemctl reboot
 }
 
