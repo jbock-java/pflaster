@@ -279,25 +279,17 @@ get_users() {
 }
 
 create_user() {
-  local user_exists user=$1
+  local user_exists user=$1 useradd_opts=()
   if [[ -e /home/$user ]]; then
     user_exists=1
   fi
-  local system=$(get_config .user.$user.system)
-  # this is not very elegant ^^
   if [[ $user_exists ]]; then
-    if [[ $system ]]; then
-      useradd -m -U --system -p "$(get_config .user.$user.password)" "$user"
-    else
-      useradd -m -U -p "$(get_config .user.$user.password)" "$user"
-    fi
-  else
-    if [[ $system ]]; then
-      useradd -U --system -p "$(get_config .user.$user.password)" "$user"
-    else
-      useradd -U -p "$(get_config .user.$user.password)" "$user"
-    fi
+    useradd_opts+=("-m")
   fi
+  if [[ $(get_config .user.$user.system) = "true" ]]; then
+    useradd_opts+=("--system")
+  fi
+  useradd -U "${useradd_opts[@]}" -p "$(get_config .user.$user.password)" "$user"
   if [[ $(get_config .user.$user.admin) = "true" ]]; then
     usermod -a -G wheel "$user"
   fi
