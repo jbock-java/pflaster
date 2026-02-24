@@ -312,7 +312,7 @@ create_user() {
 
 create_users() {
   local user users=$(get_users)
-  for user in "$users"; do
+  for user in $users; do
     create_user $user
   done
 }

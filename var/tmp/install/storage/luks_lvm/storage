@@ -98,7 +98,7 @@ sensible_rootsize() {
   pvrootsize=$(get_pvrootsize)
   homesize=$(lvs --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_home\").lv_size" | sed -E 's/^(.*)B$/\1/')
   (( homesize /= ( 1024 * 1024 ) ))
-  (( rootsize = 131072 ))
+  (( rootsize = 65536 ))
   while (( homesize + rootsize + 64 > pvrootsize )); do
     (( rootsize -= 1024 ))
   done
