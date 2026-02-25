@@ -107,12 +107,6 @@ install_packages() {
   dnf_install_rootfs "${packs[@]}"
 }
 
-install_more_packages() {
-  local software=$(get_profile software)
-  [[ $software ]] || return
-  run_chrooted $installbase/software/$software/install_more_packages
-}
-
 copy_common() {
   mkdir -p $sysroot$installbase
   mkdir -p $sysroot/usr/bin
@@ -127,7 +121,7 @@ copy_profile() {
 }
 
 install_kernel() {
-  dnf_install_rootfs kernel-modules-core-$(uname -r)
+  dnf_install_rootfs kernel-$(uname -r)
 }
 
 storage_script() {
@@ -143,9 +137,9 @@ run_hook_chrooted() {
   local software=$(get_profile software)
   [[ $storage ]] || return
   [[ $software ]] || return
-  run_chrooted $installbase/$1
-  run_chrooted $installbase/storage/$storage/$1
-  run_chrooted $installbase/software/$software/$1
+  run_chrooted $installbase/$1 || return
+  run_chrooted $installbase/storage/$storage/$1 || return
+  run_chrooted $installbase/software/$software/$1 || return
 }
 
 postgroups_chrooted() {
@@ -184,13 +178,6 @@ extract_late_tgz() {
   cp -r $sysroot/etc/yum.repos.d /etc/yum.repos.d
 }
 
-configure_hostname() {
-  local hostname="$(get_config .hostname)"
-  if [[ $hostname ]]; then
-    hostnamectl hostname $hostname
-  fi
-}
-
 do_everything() {
 
   # Preparations
@@ -203,7 +190,6 @@ do_everything() {
   run cleanup_boot_entries || return
   run extract_late_tgz || return
   run postmount_script || return
-  run configure_hostname || return
 
   # Actual installation begins here
   run mount_misc || return
@@ -213,7 +199,6 @@ do_everything() {
   run postgroups_chrooted || return
   run remove_packages || return
   run install_packages || return
-  run install_more_packages || return
   run configure_machine_id || return
   run install_sdboot || return
   run preinstall_chrooted || return

@@ -2,12 +2,20 @@
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
+enable_updates() {
+  enable_repo fedora-updates.repo
+  enable_repo fedora-updates-testing.repo
+  enable_repo rpmfusion-free-updates.repo
+  enable_repo rpmfusion-free-updates-testing.repo
+}
+
 firstboot_script() {
   run set_timezone || return
   run set_rtc_utc || return
+  run enable_updates || return
   run set_enforcing || return
-  run set_target_multi_user || return
   [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
+  run set_target_multi_user || return
   systemctl reboot
 }
 

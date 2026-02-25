@@ -31,25 +31,6 @@
      "banner": "KDE Desktop Environment"
     }
   },
-  "profile": {
-    "lvm_luks": {
-      "banner": "Logical volumes in a LUKS container.",
-      "partition": {
-        "efi": {
-          "label": "EFISYS",
-          "defaultsize": 2044
-        },
-        "root": {
-          "label": "luks-root",
-          "defaultsize": 8192
-        },
-        "home": {
-          "label": "luks-home",
-          "defaultsize": 2048
-        }
-      }
-    }
-  },
   "user": {
     "core": {
       "system": false,
@@ -69,6 +50,10 @@
     "jq",
     "chrony",
     "tmux",
+    "vim-ctrlp",
+    "cryptsetup",
+    "vim-fugitive",
+    "vim-gitgutter",
     "lvm2"
   ]
 }

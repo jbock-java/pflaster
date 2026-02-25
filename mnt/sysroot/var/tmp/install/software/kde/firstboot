@@ -2,22 +2,20 @@
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
-install_kde() {
+install_more_groups() {
   local groups=(
     kde-desktop
     fonts
     base-graphical
     hardware-support
     standard
-    networkmanager-submodules
-    admin-tools
-    multimedia
   )
   echo "dnf install group ${groups[@]}"
   dnf -qy --color=never \
       -x PackageKit-command-not-found \
       -x ksshaskpass \
       -x plasma-welcome \
+      -x fedora-workstation-repositories \
       -x grub2-common \
       -x grub2-pc \
       -x grub2-pc-modules \
@@ -29,12 +27,49 @@ install_kde() {
       group install "${groups[@]}"
 }
 
+install_more_software() {
+  local packs=(
+    git
+    mousepad
+    ugrep
+    meld
+    ffmpeg
+    x264-libs
+    x265-libs
+    gutenprint
+    portaudio
+  )
+  echo "dnf install ${packs[@]}"
+  dnf -qy --color=never install "${packs[@]}"
+}
+
+disable_updates() {
+  disable_repo fedora-updates.repo
+  disable_repo fedora-updates-testing.repo
+  disable_repo rpmfusion-free-updates-testing.repo
+  disable_repo rpmfusion-free-updates.repo
+  disable_repo google-chrome.repo
+}
+
+enable_updates() {
+  enable_repo fedora-updates.repo
+  enable_repo fedora-updates-testing.repo
+  enable_repo rpmfusion-free-updates.repo
+  enable_repo rpmfusion-free-updates-testing.repo
+}
+
 firstboot_script() {
-  run install_kde || return
+  run set_timezone || return
+  run set_rtc_utc || return
+  run disable_updates || return
+  run install_more_groups || return
+  run disable_updates || return
+  run install_more_software || return
+  run enable_updates || return
   run set_enforcing || return
   run trigger_autorelabel || return
   run set_target_graphical || return
-  systemctl reboot
+  reboot
 }
 
 return 2> /dev/null || {

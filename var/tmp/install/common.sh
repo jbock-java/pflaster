@@ -27,29 +27,29 @@ error() {
 }
 
 run() {
-  echo "Running: $1"
-  $1 || return $(error "$1")
+  echo "Running: $@"
+  "$@" || return $(error "$@")
   if [[ -f /tmp/pause ]]; then
-    echo "Halted. 'stop -c' to continue."
+    echo "Halted. Type 'stop -c' to continue."
     sleep inf
   fi
-  echo "OK: $1"
+  echo "OK: $@"
 }
 
 run_chrooted() {
   [[ -f $sysroot$installbase/profile.txt ]] || return 1
   if [[ -f $sysroot$1 ]]; then
-    echo "Running: chroot $sysroot $1"
+    echo "Running: chroot $sysroot $@"
   else
     echo "Not found: $sysroot$1"
     return 0
   fi
-  chroot $sysroot $1 || return $(error "chroot $sysroot $1")
+  chroot $sysroot "$@" || return $(error "chroot $sysroot $1")
   if [[ -f /tmp/pause ]]; then
-    echo "Paused after $1. Type 'stop -c' to continue."
+    echo "Halted. Type 'stop -c' to continue."
     sleep inf
   fi
-  echo "OK: chroot $sysroot $1"
+  echo "OK: chroot $sysroot $@"
 }
 
 run_spawned() {
@@ -351,7 +351,7 @@ set_nopasswd() {
 configure_sdboot() {
   findmnt -n /boot/efi &> /dev/null || return
   mkdir -p /boot/efi/loader
-  echo "timeout 30" >> /boot/efi/loader/loader.conf
+  echo "timeout 5" >> /boot/efi/loader/loader.conf
 }
 
 set_timezone() {
@@ -378,4 +378,57 @@ set_target_systemux() {
   sed -i -E "s@\\bFIRSTBOOT_SCRIPT\\b@/var/tmp/install/software/$software/firstboot@" /usr/share/systemux/tmux.conf
   systemctl set-default systemux.target
   set_permissive
+}
+
+manage_repo() {
+  (( $1 == 0 || $1 == 1 )) || return
+  [[ $2 ]] || return
+  local file=/etc/yum.repos.d/$(basename $2)
+  [[ -f $file ]] || return 0
+  sed -i -E \
+    -e "s/^enabled=.*/enabled=$1/" \
+    -e "s/^enabled_metadata=.*/enabled_metadata=$1/" \
+    $file
+}
+
+disable_repo() {
+  manage_repo 0 $1
+}
+
+enable_repo() {
+  manage_repo 1 $1
+}
+
+loadkeys_config() {
+  # https://unix.stackexchange.com/questions/85374/loadkeys-gives-permission-denied-for-normal-user
+  chmod u+s $(which loadkeys)
+}
+
+xdg_user_dirs_config() {
+  # make etc/locale.conf a config
+  # use standard names
+  if [[ ! -f /etc/locale.conf ]]; then
+    return 0
+  fi
+  if grep -E 'LANG=.*\ben_US\b.*' /etc/locale.conf; then
+    return 0
+  fi
+  if grep -E 'LANG=.*\bC\b.*' /etc/locale.conf; then
+    return 0
+  fi
+  if [[ ! -f /etc/xdg/user-dirs.conf ]]; then
+    return 0
+  fi
+  sed -i 's/^enabled=.*/enabled=False/' /etc/xdg/user-dirs.conf
+}
+
+configure_hostname() {
+  local hostname="$(get_config .hostname)"
+  if [[ $hostname ]]; then
+    hostnamectl hostname $hostname
+  elif [[ -f /etc/hostname ]]; then
+    hostnamectl hostname $(< /etc/hostname)
+  else
+    false || return $(error "hostname not configured")
+  fi
 }
