@@ -55,6 +55,20 @@ mount_home() {
   mount -m $device $sysroot/home
 }
 
+mount_opt() {
+  local label device storage vgname
+  storage=$(get_profile storage)
+  [[ $storage ]] || return
+  label=$(get_config ".storage.$storage.partition.opt")
+  [[ $label ]] || return 0
+  vgname=$(get_config ".storage.$storage.vgname")
+  if [[ $vgname ]]; then
+    label=$vgname-$label
+  fi
+  device=$(blkid --label $label) || return
+  mount -m $device $sysroot/opt
+}
+
 mount_efisys() {
   local label device storage
   storage=$(get_profile storage)
@@ -186,6 +200,7 @@ do_everything() {
   run storage_script || return
   run mount_rootfs || return
   run mount_home || return
+  run mount_opt || return
   run mount_efisys || return
   run cleanup_boot_entries || return
   run extract_late_tgz || return

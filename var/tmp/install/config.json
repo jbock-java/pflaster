@@ -11,6 +11,7 @@
       "partition": {
         "efi": "EFISYS",
         "root": "root",
+        "opt": "opt",
         "home": "home"
       }
     },

@@ -39,11 +39,12 @@ ask_new_lukskey() {
 }
 
 create_partitions() {
-  local disk part pvroot luksroot rootsize homesize label_home label_root label_efi pvname vgname
+  local disk part pvroot luksroot rootsize homesize optsize label_home label_opt label_root label_efi pvname vgname
   local pvrootsize=$(get_pvrootsize)
   pvname=$(get_config .storage.luks_lvm.pvname) || return
   vgname=$(get_config .storage.luks_lvm.vgname) || return
   label_home=$(get_config .storage.luks_lvm.partition.home) || return
+  label_opt=$(get_config .storage.luks_lvm.partition.opt) || return
   label_root=$(get_config .storage.luks_lvm.partition.root) || return
   label_efi=$(get_config .storage.luks_lvm.partition.efi) || return
   while :; do
@@ -59,19 +60,23 @@ create_partitions() {
   luksroot=$(get_only_child $pvroot) || return
   pvcreate $luksroot || return
   vgcreate $vgname $luksroot || return
+  (( optsize = 2048 ))
   (( rootsize = pvrootsize / 2 ))
   (( rootsize > 65536 && ( rootsize = 65536 ) ))
   (( rootsize < 8192 && ( rootsize = 8192 ) ))
   (( homesize = pvrootsize / 2 ))
-  while (( homesize + rootsize + 64 > pvrootsize )); do
-    (( homesize -= 8 ))
+  while (( homesize + optsize + rootsize + 64 > pvrootsize )); do
+    (( homesize -= 16 ))
+    (( rootsize > 9216 && ( rootsize -= 16 ) ))
   done
   (( homesize > 65536 && ( homesize = 65536 ) ))
   (( homesize >= 1024 )) || return
   lvcreate -L ${rootsize}M -n $label_root $vgname || return
   lvcreate -L ${homesize}M -n $label_home $vgname || return
+  lvcreate -L ${optsize}M -n $label_opt $vgname || return
   mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
   mkfs.ext4 -q -L $vgname-$label_home /dev/mapper/$vgname-$label_home <<< y || return
+  mkfs.ext4 -q -L $vgname-$label_opt /dev/mapper/$vgname-$label_opt <<< y || return
 }
 
 ask_existing_lukskey() {
@@ -91,15 +96,18 @@ ask_existing_lukskey() {
 }
 
 sensible_rootsize() {
-  local pvrootsize homesize vgname label_home
+  local pvrootsize homesize vgname label_home label_opt
   vgname=$(get_config .storage.luks_lvm.vgname) || return
   label_home=$(get_config .storage.luks_lvm.partition.home) || return
+  label_opt=$(get_config .storage.luks_lvm.partition.opt) || return
   [[ -e /dev/mapper/$vgname-$label_home ]] || return
   pvrootsize=$(get_pvrootsize)
   homesize=$(lvs --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_home\").lv_size" | sed -E 's/^(.*)B$/\1/')
+  optsize=$(lvs --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_opt\").lv_size" | sed -E 's/^(.*)B$/\1/')
   (( homesize /= ( 1024 * 1024 ) ))
+  (( optsize /= ( 1024 * 1024 ) ))
   (( rootsize = 65536 ))
-  while (( homesize + rootsize + 64 > pvrootsize )); do
+  while (( homesize + rootsize + optsize + 64 > pvrootsize )); do
     (( rootsize -= 1024 ))
   done
   (( rootsize >= 8192 )) || return
@@ -108,10 +116,11 @@ sensible_rootsize() {
 
 unlock_home_and_format_root() {
   [[ -f $installbase/lukskey ]] || return 1
-  local pvroot luks_root efisys label_home label_root label_efi pvname vgname rootsize
+  local pvroot luks_root efisys label_home label_opt label_root label_efi pvname vgname rootsize optsize
   pvname=$(get_config .storage.luks_lvm.pvname) || return
   vgname=$(get_config .storage.luks_lvm.vgname) || return
   label_home=$(get_config .storage.luks_lvm.partition.home) || return
+  label_opt=$(get_config .storage.luks_lvm.partition.opt) || return
   label_root=$(get_config .storage.luks_lvm.partition.root) || return
   label_efi=$(get_config .storage.luks_lvm.partition.efi) || return
   efisys=$(blkid --label $label_efi) || return
@@ -126,7 +135,13 @@ unlock_home_and_format_root() {
     lvcreate -L ${rootsize}M -n $label_root $vgname || return
     mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
   fi
+  if [[ ! -e /dev/mapper/$vgname-$label_opt ]]; then
+    (( optsize = 2048 ))
+    lvcreate -L ${optsize}M -n $label_opt $vgname || return
+    mkfs.ext4 -q -L $vgname-$label_opt /dev/mapper/$vgname-$label_opt <<< y || return
+  fi
   e2label /dev/mapper/$vgname-$label_home $vgname-$label_home || return
+  e2label /dev/mapper/$vgname-$label_opt $vgname-$label_opt || return
   mkfs.vfat -n $label_efi -F 32 $efisys || return
 }
 
