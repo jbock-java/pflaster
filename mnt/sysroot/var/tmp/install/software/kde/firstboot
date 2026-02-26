@@ -38,6 +38,9 @@ install_more_software() {
     x265-libs
     gutenprint
     portaudio
+    NetworkManager-wifi
+    liberation-sans-fonts.noarch
+    liberation-serif-fonts.noarch
   )
   echo "dnf install ${packs[@]}"
   dnf -qy --color=never install "${packs[@]}"

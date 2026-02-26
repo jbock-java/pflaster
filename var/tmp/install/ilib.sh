@@ -126,6 +126,7 @@ copy_common() {
   mkdir -p $sysroot/usr/bin
   cp $installbase/common.sh $sysroot$installbase || return
   cp $installbase/config.json $sysroot$installbase || return
+  cp $installbase/disk $sysroot$installbase || return
 }
 
 copy_profile() {
@@ -192,6 +193,26 @@ extract_late_tgz() {
   cp -r $sysroot/etc/yum.repos.d /etc/yum.repos.d
 }
 
+boot_loader_entry() {
+  if efibootmgr | grep -q -E '^Boot\S+\s+\bFedora\b.*'; then
+    return 0
+  fi
+  local storage label uuid partuuid partnum
+  local storage=$(get_profile storage)
+  [[ $storage ]] || return
+  label=$(get_config .storage.$storage.partition.efi)
+  [[ $label ]] || return
+  uuid=$(lsblk -n --filter "LABEL == \"$label\"" -o UUID)
+  [[ $uuid ]] || return
+  partuuid=$(lsblk -n --filter "UUID == \"$uuid\"" -o PARTUUID)
+  [[ $partuuid ]] || return
+  disk=$(get_disk)
+  [[ $disk ]] || return
+  partnum=$(parted -j $disk print | jq -r ".disk.partitions[]|select(.uuid==\"$partuuid\")|.number")
+  [[ $partnum ]] || return
+  echo efibootmgr --create --disk=$disk --part=$partnum --label="Fedora" --loader='EFI\BOOT\BOOTX64.EFI'
+}
+
 do_everything() {
 
   # Preparations
@@ -220,6 +241,7 @@ do_everything() {
   run install_kernel || return
   run postinstall_chrooted || return
   run umount_misc || return
+  run boot_loader_entry || return
   run copy_logs || return
   [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
   reboot

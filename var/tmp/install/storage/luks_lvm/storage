@@ -60,7 +60,7 @@ create_partitions() {
   luksroot=$(get_only_child $pvroot) || return
   pvcreate $luksroot || return
   vgcreate $vgname $luksroot || return
-  (( optsize = 2048 ))
+  (( optsize = 32768 ))
   (( rootsize = pvrootsize / 2 ))
   (( rootsize > 65536 && ( rootsize = 65536 ) ))
   (( rootsize < 8192 && ( rootsize = 8192 ) ))
@@ -96,16 +96,20 @@ ask_existing_lukskey() {
 }
 
 sensible_rootsize() {
-  local pvrootsize homesize vgname label_home label_opt
+  local pvrootsize homesize optsize vgname label_home label_opt
   vgname=$(get_config .storage.luks_lvm.vgname) || return
   label_home=$(get_config .storage.luks_lvm.partition.home) || return
   label_opt=$(get_config .storage.luks_lvm.partition.opt) || return
   [[ -e /dev/mapper/$vgname-$label_home ]] || return
   pvrootsize=$(get_pvrootsize)
   homesize=$(lvs --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_home\").lv_size" | sed -E 's/^(.*)B$/\1/')
-  optsize=$(lvs --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_opt\").lv_size" | sed -E 's/^(.*)B$/\1/')
+  if [[ -e /dev/mapper/$vgname-$label_opt ]]; then
+    optsize=$(lvs --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_opt\").lv_size" | sed -E 's/^(.*)B$/\1/')
+    (( optsize /= ( 1024 * 1024 ) ))
+  else
+    (( optsize = 32768 ))
+  fi
   (( homesize /= ( 1024 * 1024 ) ))
-  (( optsize /= ( 1024 * 1024 ) ))
   (( rootsize = 65536 ))
   while (( homesize + rootsize + optsize + 64 > pvrootsize )); do
     (( rootsize -= 1024 ))
@@ -136,7 +140,7 @@ unlock_home_and_format_root() {
     mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
   fi
   if [[ ! -e /dev/mapper/$vgname-$label_opt ]]; then
-    (( optsize = 2048 ))
+    (( optsize = 32768 ))
     lvcreate -L ${optsize}M -n $label_opt $vgname || return
     mkfs.ext4 -q -L $vgname-$label_opt /dev/mapper/$vgname-$label_opt <<< y || return
   fi
