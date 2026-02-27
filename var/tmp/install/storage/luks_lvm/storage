@@ -60,7 +60,11 @@ create_partitions() {
   luksroot=$(get_only_child $pvroot) || return
   pvcreate $luksroot || return
   vgcreate $vgname $luksroot || return
-  (( optsize = 32768 ))
+  if [[ $label_opt ]]; then
+    (( optsize = 32768 ))
+  else
+    (( optsize = 0 ))
+  fi
   (( rootsize = pvrootsize / 2 ))
   (( rootsize > 65536 && ( rootsize = 65536 ) ))
   (( rootsize < 8192 && ( rootsize = 8192 ) ))
@@ -69,14 +73,16 @@ create_partitions() {
     (( homesize -= 16 ))
     (( rootsize > 9216 && ( rootsize -= 16 ) ))
   done
-  (( homesize > 65536 && ( homesize = 65536 ) ))
+  (( homesize > 262144 && ( homesize = 262144 ) ))
   (( homesize >= 1024 )) || return
   lvcreate -L ${rootsize}M -n $label_root $vgname || return
   lvcreate -L ${homesize}M -n $label_home $vgname || return
-  lvcreate -L ${optsize}M -n $label_opt $vgname || return
+  if [[ $label_opt ]]; then
+    lvcreate -L ${optsize}M -n $label_opt $vgname || return
+    mkfs.ext4 -q -L $vgname-$label_opt /dev/mapper/$vgname-$label_opt <<< y || return
+  fi
   mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
   mkfs.ext4 -q -L $vgname-$label_home /dev/mapper/$vgname-$label_home <<< y || return
-  mkfs.ext4 -q -L $vgname-$label_opt /dev/mapper/$vgname-$label_opt <<< y || return
 }
 
 ask_existing_lukskey() {
@@ -106,8 +112,10 @@ sensible_rootsize() {
   if [[ -e /dev/mapper/$vgname-$label_opt ]]; then
     optsize=$(lvs --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_opt\").lv_size" | sed -E 's/^(.*)B$/\1/')
     (( optsize /= ( 1024 * 1024 ) ))
-  else
+  elif [[ $label_opt ]]; then
     (( optsize = 32768 ))
+  else
+    (( optsize = 0 ))
   fi
   (( homesize /= ( 1024 * 1024 ) ))
   (( rootsize = 65536 ))
@@ -139,13 +147,15 @@ unlock_home_and_format_root() {
     lvcreate -L ${rootsize}M -n $label_root $vgname || return
     mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
   fi
-  if [[ ! -e /dev/mapper/$vgname-$label_opt ]]; then
+  if [[ -n $label_opt && ! -e /dev/mapper/$vgname-$label_opt ]]; then
     (( optsize = 32768 ))
     lvcreate -L ${optsize}M -n $label_opt $vgname || return
     mkfs.ext4 -q -L $vgname-$label_opt /dev/mapper/$vgname-$label_opt <<< y || return
   fi
   e2label /dev/mapper/$vgname-$label_home $vgname-$label_home || return
-  e2label /dev/mapper/$vgname-$label_opt $vgname-$label_opt || return
+  if [[ -e /dev/mapper/$vgname-$label_opt ]]; then
+    e2label /dev/mapper/$vgname-$label_opt $vgname-$label_opt || return
+  fi
   mkfs.vfat -n $label_efi -F 32 $efisys || return
 }
 
