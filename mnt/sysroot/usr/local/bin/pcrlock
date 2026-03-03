@@ -1,0 +1,27 @@
+#!/bin/bash
+
+[[ -v installbase ]] || source /var/tmp/install/common.sh
+
+set_pcrs() {
+  has_tpm || return 0
+  [[ -f $installbase/lukskey ]] || {
+    echo "lukskey not found"
+    return 1
+  }
+  local storage pvname device
+  storage=$(get_profile storage)
+  [[ $storage ]] || return
+  pvname=$(get_config ".storage.$storage.pvname")
+  [[ $pvname ]] || return
+  device=$(blkid --label $pvname)
+  [[ $device ]] || return
+  systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "$1" --unlock-key-file $installbase/lukskey $device
+}
+
+pcrlock() {
+  set_pcrs "2+5+7+9"
+}
+
+return 2> /dev/null || {
+  pcrlock
+}

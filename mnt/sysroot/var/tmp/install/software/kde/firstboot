@@ -61,6 +61,10 @@ enable_updates() {
   enable_repo rpmfusion-free-updates-testing.repo
 }
 
+enable_pcrlock() {
+  systemctl enable pcrlock.service
+}
+
 firstboot_script() {
   run set_timezone || return
   run set_rtc_utc || return
@@ -69,6 +73,7 @@ firstboot_script() {
   run disable_updates || return
   run install_more_software || return
   run enable_updates || return
+  run enable_pcrlock || return
   run set_enforcing || return
   run trigger_autorelabel || return
   run set_target_graphical || return

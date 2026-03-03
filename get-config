@@ -3,7 +3,7 @@
 # This script is used for testing purposes.
 
 if (( $# == 0 )); then
-  jq . "$(dirname $0)/tmp/install/config.json"
+  jq . "/var/tmp/install/config.json"
   exit 0
 fi
 
@@ -15,4 +15,4 @@ else
   prop=.$1
 fi
 
-jq -M -r "$prop" "$(dirname $0)/tmp/install/config.json"
+jq -M -r "$prop" "/var/tmp/install/config.json"
