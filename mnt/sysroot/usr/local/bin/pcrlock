@@ -4,10 +4,6 @@
 
 set_pcrs() {
   has_tpm || return 0
-  [[ -f $installbase/lukskey ]] || {
-    echo "lukskey not found"
-    return 1
-  }
   local storage pvname device
   storage=$(get_profile storage)
   [[ $storage ]] || return
@@ -15,7 +11,11 @@ set_pcrs() {
   [[ $pvname ]] || return
   device=$(blkid --label $pvname)
   [[ $device ]] || return
-  systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "$1" --unlock-key-file $installbase/lukskey $device
+  if [[ -f $installbase/lukskey ]]; then
+    systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "$1" --unlock-key-file $installbase/lukskey $device
+  else
+    systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "$1" --unlock-tpm2-device auto $device
+  fi
 }
 
 pcrlock() {
