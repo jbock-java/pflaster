@@ -25,10 +25,12 @@
   },
   "software": {
     "minimal": {
-      "banner": "only core packages"
+      "banner": "only core packages",
+      "target": "multi-user"
     },
     "kde": {
-     "banner": "KDE Desktop Environment"
+      "banner": "KDE Desktop Environment",
+      "target": "graphical"
     }
   },
   "user": {

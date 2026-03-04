@@ -37,7 +37,7 @@ run() {
 }
 
 run_chrooted() {
-  [[ -f $sysroot$installbase/profile.txt ]] || return 1
+  [[ -f $sysroot$installbase/profile.txt ]] || return
   if [[ -f $sysroot$1 ]]; then
     echo "Running: chroot $sysroot $@"
   else
@@ -53,7 +53,7 @@ run_chrooted() {
 }
 
 run_spawned() {
-  [[ -f $sysroot$installbase/profile.txt ]] || return 1
+  [[ -f $sysroot$installbase/profile.txt ]] || return
   if [[ -f $sysroot$1 ]]; then
     echo "Running: systemd-nspawn -M pflaster -D $sysroot $1"
   else
@@ -363,20 +363,20 @@ set_rtc_utc() {
   timedatectl set-local-rtc 0
 }
 
-set_target_multi_user() {
-  systemctl set-default multi-user.target
+set_target_anyboot() {
+  local target software
+  software=$(get_profile software)
+  [[ $software ]] || return
+  target=$(get_config ".software.$software.target")
+  [[ $target ]] || return
+  systemctl set-default $target.target
 }
 
-set_target_graphical() {
-  systemctl set-default graphical.target
-}
-
-set_target_systemux() {
+set_target_firstboot() {
   [[ -f /usr/share/systemux/tmux.conf ]] || return
   local software=$(get_profile software)
   [[ $software ]] || return
-  sed -i -E "s@\\bFIRSTBOOT_SCRIPT\\b@/var/tmp/install/software/$software/firstboot@" /usr/share/systemux/tmux.conf
-  systemctl set-default systemux.target
+  systemctl set-default firstboot.target
   set_permissive
 }
 

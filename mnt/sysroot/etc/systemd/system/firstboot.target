@@ -1,8 +1,9 @@
 [Unit]
-Description=systemux
+Description=Default target for the first boot after installation.
 Requires=basic.target
 AllowIsolate=yes
-After=network-online.target plymouth-quit-wait.service
+After=network-online.target
+After=plymouth-quit-wait.service
 Wants=plymouth-quit.service
 Wants=network-online.target
 Wants=systemux.service

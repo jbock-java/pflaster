@@ -1,0 +1,10 @@
+[Unit]
+Description=Runs on every boot. The only exception is the first boot after installation.
+After=basic.target
+
+[Service]
+ExecStart=/usr/local/bin/anyboot
+Type=simple
+
+[Install]
+WantedBy=multi-user.target

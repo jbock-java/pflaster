@@ -4,24 +4,23 @@
 
 set_pcrs() {
   has_tpm || return 0
-  local storage pvname device
-  storage=$(get_profile storage)
-  [[ $storage ]] || return
-  pvname=$(get_config ".storage.$storage.pvname")
+  local pvname device
+  pvname=$(get_config ".storage.luks_lvm.pvname")
   [[ $pvname ]] || return
   device=$(blkid --label $pvname)
   [[ $device ]] || return
   if [[ -f $installbase/lukskey ]]; then
     systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "$1" --unlock-key-file $installbase/lukskey $device
   else
+    # Does this work? Then maybe there's no need to keep the lukskey around.
     systemd-cryptenroll --wipe-slot tpm2 --tpm2-device auto --tpm2-pcrs "$1" --unlock-tpm2-device auto $device
   fi
 }
 
-pcrlock() {
+anyboot() {
   set_pcrs "2+5+7+9"
 }
 
 return 2> /dev/null || {
-  pcrlock
+  anyboot
 }

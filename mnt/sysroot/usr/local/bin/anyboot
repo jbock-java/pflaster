@@ -1,0 +1,23 @@
+#!/bin/bash
+
+[[ -v installbase ]] || source /var/tmp/install/common.sh
+
+anyboot() {
+  local segment file storage software rc=0
+  storage=$(get_profile storage)
+  software=$(get_profile software)
+  [[ $storage ]] || return
+  [[ $software ]] || return
+  for segment in storage/$storage software/$software; do
+    file=$installbase/$segment/anyboot
+    if [[ -f $file ]]; then
+      echo "Running: $file"
+      $file || rc=1
+    fi
+  done
+  return $rc
+}
+
+return 2> /dev/null || {
+  anyboot
+}
