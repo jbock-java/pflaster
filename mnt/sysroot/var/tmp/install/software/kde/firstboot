@@ -47,9 +47,6 @@ install_more_software() {
     im-chooser
     libadwaita
     libva-intel-media-driver
-    qt6-qtwayland-adwaita-decoration
-    mozjs128
-    mozjs140
     kwebkitpart
     SDL2_ttf
     breeze-icon-theme-fedora

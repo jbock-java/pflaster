@@ -367,10 +367,10 @@ set_rtc_utc() {
 set_target_anyboot() {
   local target software
   software=$(get_profile software)
-  [[ $software ]] || return
-  target=$(get_config ".software.$software.target")
-  [[ $target ]] || return
-  systemctl set-default $target.target
+  if [[ $software ]]; then
+    target=$(get_config ".software.$software.target")
+  fi
+  systemctl set-default ${target:-multi-user}.target
 }
 
 set_target_firstboot() {
