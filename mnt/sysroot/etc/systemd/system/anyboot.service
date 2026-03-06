@@ -1,6 +1,6 @@
 [Unit]
 Description=Runs on every boot. The only exception is the first boot after installation.
-After=basic.target
+After=network-online.target
 
 [Service]
 ExecStart=/usr/local/bin/anyboot
