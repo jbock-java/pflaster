@@ -329,6 +329,7 @@ set_root_pw() {
 }
 
 trigger_autorelabel() {
+  rpm --quiet -q selinux-policy || return 0
   touch /.autorelabel
 }
 
@@ -378,6 +379,9 @@ set_target_firstboot() {
   [[ $software ]] || return
   systemctl set-default firstboot.target
   set_permissive
+  # sesearch -s init_t -t screen_exec_t -c file -A
+  # sesearch -s init_t -t init_t -c file -A
+  chcon -t bin_t /usr/bin/tmux
 }
 
 manage_repo() {
