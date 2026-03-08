@@ -6,7 +6,6 @@
 
 do_postinstall() {
   run loadkeys_config || return
-  run xdg_user_dirs_config || return
   run set_nopasswd || return
 }
 

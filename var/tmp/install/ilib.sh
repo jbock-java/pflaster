@@ -110,7 +110,7 @@ remove_packages() {
   while read -r pack; do
     packs+=("$pack")
   done < <(get_packages_excludes)
-  dnf_remove_rootfs "${packs[@]}" || true
+  dnf_remove_rootfs "${packs[@]}"
 }
 
 install_packages() {
@@ -244,6 +244,9 @@ do_everything() {
   run umount_misc || return
   run boot_loader_entry || return
   run copy_logs || return
-  [[ -f /tmp/stop ]] && { echo "Halted. 'stop -c' to continue" ; sleep inf ; }
+  if [[ -f /tmp/stop ]]; then
+    echo "Halted. 'stop -c' to continue"
+    sleep inf
+  fi
   reboot
 }

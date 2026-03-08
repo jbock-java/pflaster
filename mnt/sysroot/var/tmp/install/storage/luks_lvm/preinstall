@@ -40,10 +40,9 @@ configure_fstab() {
 
 print_cmdline_options() {
   local uuid_root uuid_pvroot label_root pvname vgname
-  label_root=$(get_config .storage.luks_lvm.partition.root)
-  pvname=$(get_config .storage.luks_lvm.pvname) || return
+  pvname=$(get_config .storage.luks_lvm.pvname)
   vgname=$(get_config .storage.luks_lvm.vgname)
-  [[ $vgname ]] || return
+  label_root=$(get_config .storage.luks_lvm.partition.root)
   uuid_root=$(get_uuid $vgname-$label_root)
   uuid_pvroot=$(get_uuid $pvname)
   [[ $uuid_root ]] || return

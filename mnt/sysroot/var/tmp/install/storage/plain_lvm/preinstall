@@ -6,19 +6,24 @@
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
 print_fstab() {
-  local label_home label_root label_efi
+  local label_home label_root label_efi label_swap vgname uuid_efi uuid_root uuid_home uuid_swap
   label_home=$(get_config .storage.plain_lvm.partition.home)
   label_root=$(get_config .storage.plain_lvm.partition.root)
   label_efi=$(get_config .storage.plain_lvm.partition.efi)
+  label_swap=$(get_config .storage.plain_lvm.partition.swap)
+  vgname=$(get_config .storage.plain_lvm.vgname)
   uuid_efi=$(get_uuid $label_efi)
-  uuid_root=$(get_uuid $label_root)
-  uuid_home=$(get_uuid $label_home)
+  uuid_root=$(get_uuid $vgname-$label_root)
+  uuid_home=$(get_uuid $vgname-$label_home)
+  uuid_swap=$(lsblk -n -o UUID /dev/mapper/$vgname-$label_swap)
   [[ $uuid_efi ]] || return
   [[ $uuid_root ]] || return
   [[ $uuid_home ]] || return
+  [[ $uuid_swap ]] || return
   echo "UUID=$uuid_efi  /boot/efi vfat umask=0077,shortname=winnt 0 2"
   echo "UUID=$uuid_root /         ext4 defaults 1 2"
   echo "UUID=$uuid_home /home     ext4 defaults 1 2"
+  echo "UUID=$uuid_swap swap      swap defaults 0 0"
 }
 
 configure_fstab() {
@@ -27,12 +32,13 @@ configure_fstab() {
 }
 
 print_cmdline_options() {
-  local label_root
+  local vgname label_root uuid_root
+  vgname=$(get_config .storage.plain_lvm.vgname)
   label_root=$(get_config .storage.plain_lvm.partition.root)
-  uuid_root=$(get_uuid $label_root)
+  uuid_root=$(get_uuid $vgname-$label_root)
   [[ $uuid_root ]] || return
   echo "root=UUID=$uuid_root"
-  echo "rd.lvm.vg=linux"
+  echo "rd.lvm.vg=$vgname"
   echo "rd.shell"
 }
 

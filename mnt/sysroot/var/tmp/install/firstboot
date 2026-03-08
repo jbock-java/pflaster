@@ -15,6 +15,7 @@ firstboot() {
       $file || rc=1
     fi
   done
+  run configure_hostname || return
   systemctl enable anyboot.service || return
   run set_target_anyboot || return
   if [[ -f /tmp/stop ]]; then
@@ -25,5 +26,9 @@ firstboot() {
 }
 
 return 2> /dev/null || {
-  firstboot
+  firstboot || {
+    echo "Halted after error."
+    sleep inf
+  }
+  reboot
 }

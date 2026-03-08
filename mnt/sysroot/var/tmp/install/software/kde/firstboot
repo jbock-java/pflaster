@@ -13,6 +13,7 @@ install_more_groups() {
   echo "dnf install group ${groups[@]}"
   dnf -qy --color=never \
       -x PackageKit-command-not-found \
+      -x xdg-user-dirs \
       -x ksshaskpass \
       -x plasma-welcome \
       -x fedora-workstation-repositories \
@@ -89,7 +90,6 @@ firstboot_script() {
   run enable_updates || return
   run set_enforcing || return
   run trigger_autorelabel || return
-  reboot
 }
 
 return 2> /dev/null || {

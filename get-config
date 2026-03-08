@@ -15,4 +15,4 @@ else
   prop=.$1
 fi
 
-jq -M -r "$prop" "/var/tmp/install/config.json"
+jq -M -r "$prop" "/var/tmp/install/config.json" 2> /dev/null

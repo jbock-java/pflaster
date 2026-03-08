@@ -24,64 +24,141 @@ print_parted_commands() {
   (( pos += pvrootsize ))
 }
 
-wipe() {
-  local disk part pvname vgname pvroot pvrootsize rootsize homesize label_home label_root label_efi volgs
-  pvrootsize=$(get_pvrootsize)
-  vgchange -an
-  pvname=$(get_config .storage.plain_lvm.pvname) || return
+create_partitions() {
+  local disk pvname vgname pvroot pvrootsize rootsize homesize swapsize label_home label_root label_efi label_swap vg max_swapsize
   vgname=$(get_config .storage.plain_lvm.vgname) || return
+  vgchange -an $vgname || return
+  for vg in $(vgs --noheadings | sed -E 's/^\s*\b(\S+)\b.*/\1/'); do
+    if [[ $vg = "$vgname" ]]; then
+      vgremove -f $vgname || return
+    fi
+  done
+  max_swapsize=$(get_ram_mb) || return
+  (( max_swapsize += 2048 ))
+  pvrootsize=$(get_pvrootsize)
+  pvname=$(get_config .storage.plain_lvm.pvname) || return
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
   label_root=$(get_config .storage.plain_lvm.partition.root) || return
+  label_swap=$(get_config .storage.plain_lvm.partition.swap) || return
   label_efi=$(get_config .storage.plain_lvm.partition.efi) || return
   disk=$(get_disk) || return
   parted --script --align optimal $disk -- $(print_parted_commands) || return 
   mkfs.vfat -n $label_efi -F 32 $(by_partlabel EFISYS) || return
   pvroot=$(by_partlabel $pvname) || return
-  volgs=$(vgs --noheadings | sed -E 's/^\s*\b(\S+)\b.*/\1/')
-  if [[ $volgs = "$vgname" ]]; then
-    vgremove -f $vgname
-  fi
   pvcreate $pvroot || return
   vgcreate $vgname $pvroot || return
+  (( swapsize = 1024 ))
   (( rootsize = pvrootsize / 2 ))
   (( rootsize > 65536 && ( rootsize = 65536 ) ))
   (( rootsize < 8192 && ( rootsize = 8192 ) ))
-  (( homesize = pvrootsize - rootsize - 32 ))
-  (( homesize > 65536 && ( homesize = 65536 ) ))
+  (( homesize = pvrootsize / 2 ))
+  while (( homesize + swapsize + rootsize + 64 > pvrootsize )); do
+    (( homesize -= 16 ))
+    (( rootsize > 9216 && ( rootsize -= 16 ) ))
+  done
+  if (( homesize > 262144 )); then
+    (( swapsize += ( homesize - 262144 ) ))
+    (( homesize = 262144 ))
+    (( swapsize > max_swapsize && ( swapsize = max_swapsize ) ))
+  fi
   (( homesize >= 1024 )) || return
-  lvcreate -L ${rootsize}M -n $label_root $vgname || return
-  lvcreate -L ${homesize}M -n $label_home $vgname || return
+  lvcreate --size ${rootsize}M --name $label_root $vgname || return
+  lvcreate --size ${homesize}M --name $label_home $vgname || return
+  lvcreate --size ${swapsize}M --name $label_swap $vgname || return
   mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
   mkfs.ext4 -q -L $vgname-$label_home /dev/mapper/$vgname-$label_home <<< y || return
+  mkswap /dev/mapper/$vgname-$label_swap
 }
 
-only_format_root() {
-  local vgname efisys label_home label_root label_efi
+wipe() {
+  local REPLY
+  while :; do
+    read -rp "Erase all data on $(get_disk)? [y/N] "
+    if [[ $REPLY =~ [yY] ]]; then
+      break
+    elif [[ $REPLY =~ [nN] ]]; then
+      echo "Installation halted."
+      sleep inf
+    fi
+  done
+  create_partitions
+}
+
+sensible_rootsize() {
+  local pvrootsize homesize swapsize vgname label_home label_swap max_swapsize
+  max_swapsize=$(get_ram_mb) || return
+  (( max_swapsize += 2048 ))
+  vgname=$(get_config .storage.plain_lvm.vgname) || return
+  label_home=$(get_config .storage.plain_lvm.partition.home) || return
+  label_swap=$(get_config .storage.plain_lvm.partition.swap) || return
+  [[ -e /dev/mapper/$vgname-$label_home ]] || return
+  pvrootsize=$(get_pvrootsize)
+  homesize=$(lvs --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_home\").lv_size" | sed -E 's/^(.*)B$/\1/')
+  if [[ -e /dev/mapper/$vgname-$label_swap ]]; then
+    swapsize=$(lvs --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_swap\").lv_size" | sed -E 's/^(.*)B$/\1/')
+    (( swapsize /= ( 1024 * 1024 ) ))
+  else
+    (( swapsize = max_swapsize ))
+  fi
+  (( homesize /= ( 1024 * 1024 ) ))
+  (( rootsize = 65536 ))
+  while (( homesize + rootsize + swapsize + 64 > pvrootsize )); do
+    (( rootsize -= 1024 ))
+  done
+  (( rootsize >= 8192 )) || return
+  echo $rootsize
+}
+
+preserve_home() {
+  local vgname efisys label_home label_root label_efi label_swap swapsize rootsize
   vgname=$(get_config .storage.plain_lvm.vgname) || return
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
   label_root=$(get_config .storage.plain_lvm.partition.root) || return
   label_efi=$(get_config .storage.plain_lvm.partition.efi) || return
+  label_swap=$(get_config .storage.plain_lvm.partition.swap) || return
   efisys=$(blkid --label $label_efi) || return
-  linuxroot=$(blkid --label $vgname-$label_root) || return
-  mkfs.ext4 -q -L $vgname-$label_root $linuxroot <<< y || return
   mkfs.vfat -n $label_efi -F 32 $efisys || return
+  if [[ -e /dev/mapper/$vgname-$label_root ]]; then
+    mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
+  else
+    rootsize=$(sensible_rootsize) || return
+    lvcreate --size ${rootsize}M --name $label_root $vgname || return
+    mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
+  fi
+  if [[ ! -e /dev/mapper/$vgname-$label_swap ]]; then
+    swapsize=$(get_ram_mb) || return
+    (( swapsize += 2048 ))
+    lvcreate --size ${swapsize}M --name $label_swap $vgname || return
+  fi
+  e2label /dev/mapper/$vgname-$label_home $vgname-$label_home || return
 }
 
 prepare_partitions() {
-  local label_home REPLY
-  vgchange -ay
+  local label_home pvname vgname REPLY
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
-  if blkid --label $label_home &> /dev/null; then
-    # todo: ask if wipe desired
-    only_format_root
-  else
-    while true; do
-      read -rp "Erase all data on $(get_disk)? [y/N] "
-      [[ $REPLY =~ [yY] ]] && break
-      [[ $REPLY =~ [nN] ]] && { echo "Installation halted." ; sleep inf ; }
-    done
+  pvname=$(get_config .storage.plain_lvm.pvname) || return
+  vgname=$(get_config .storage.plain_lvm.vgname) || return
+  if ! blkid --label $pvname &> /dev/null; then
+    echo "No such partition: $pvname"
     wipe
+    return
   fi
+  vgchange -ay $vgname
+  if [[ ! -e /dev/mapper/$vgname-$label_home ]]; then
+    echo "No such partition: /dev/mapper/$vgname-$label_home"
+    wipe
+    return
+  fi
+  while :; do
+    read -rp "Preserve data on /dev/mapper/$vgname-$label_home? [Y/n] "
+    if [[ -z $REPLY || $REPLY =~ [yY] ]]; then
+      preserve_home
+      return
+    else
+      wipe
+      return
+    fi
+  done
 }
 
 return 2> /dev/null || {

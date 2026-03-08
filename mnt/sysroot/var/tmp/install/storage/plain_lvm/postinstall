@@ -1,12 +1,14 @@
 #!/bin/bash
-#
-# chrooted
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
+disable_zram() {
+  mkdir -p /etc/systemd
+  touch /etc/systemd/zram-generator.conf
+}
+
 do_postinstall() {
-  run loadkeys_config || return
-  run set_nopasswd || return
+  run disable_zram || return
 }
 
 return 2> /dev/null || {

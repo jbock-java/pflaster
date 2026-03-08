@@ -5,24 +5,33 @@
   ],
   "storage": {
     "luks_lvm": {
-      "banner": "luks + lvm + ext4",
+      "banner": "luks + lvm + ext4. TPM2 unlocking.",
       "pvname": "pvroot",
       "vgname": "luks",
       "partition": {
         "efi": "EFISYS",
         "root": "root",
         "home": "home"
-      }
+      },
+      "packages": [
+        "lvm2",
+        "cryptsetup"
+      ]
     },
     "plain_lvm": {
-      "banner": "lvm + ext4",
+      "banner": "For resource constrained machines. lvm + ext4.",
       "pvname": "pvroot",
       "vgname": "linux",
       "partition": {
         "efi": "EFISYS",
         "root": "root",
+        "swap": "swap",
         "home": "home"
-      }
+      },
+      "packages": [
+        "lvm2",
+        "-zram-generator-defaults"
+      ]
     }
   },
   "software": {
@@ -46,18 +55,14 @@
   "packages": [
     "@core",
     "-nano-default-editor",
-    "vim-enhanced",
-    "vim-default-editor",
     "systemd-boot-unsigned",
     "efibootmgr",
-    "selinux-policy",
-    "jq",
     "chrony",
-    "tmux",
+    "selinux-policy",
+    "vim-enhanced",
+    "vim-default-editor",
     "vim-ctrlp",
-    "cryptsetup",
-    "vim-fugitive",
-    "vim-gitgutter",
-    "lvm2"
+    "jq",
+    "tmux"
   ]
 }

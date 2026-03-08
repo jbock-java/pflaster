@@ -13,7 +13,6 @@ firstboot_script() {
   run set_timezone || return
   run set_rtc_utc || return
   run enable_updates || return
-  systemctl reboot
 }
 
 return 2> /dev/null || {

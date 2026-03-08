@@ -183,14 +183,10 @@ is_empty_file() {
 
 get_config() {
   local result
-  result=$(jq -M -r "$1" "$installbase/config.json")
+  result=$(jq -M -r "$1" "$installbase/config.json" 2> /dev/null) || return 0
   if [[ ${result:-null} != "null" ]]; then
     echo "$result"
   fi
-}
-
-has_modifier() {
-  jq -M -r '.modifiers[]' "$installbase/config.json" | grep -q "^$1$"
 }
 
 configure_disk() {
@@ -235,13 +231,21 @@ dnf_group_install_rootfs() {
   dnf4 -qy --color=never group install --nogpgcheck --releasever=$(os_release) --installroot $sysroot "$@"
 }
 
+get_config_packages() {
+  local storage
+  get_config '.packages[]'
+  storage=$(get_profile .storage)
+  [[ $storage ]] || return
+  get_config ".storage.$storage.packages[]"
+}
+
 get_packages_groups() {
   local pack
   while read -r pack; do
     if [[ $pack = @* && $pack != @^* ]]; then
       echo "${pack:1}"
     fi
-  done < <(get_config '.packages[]')
+  done < <(get_config_packages)
 }
 
 get_packages_excludes() {
@@ -250,7 +254,7 @@ get_packages_excludes() {
     if [[ $pack = -* ]]; then
       echo "${pack:1}"
     fi
-  done < <(get_config '.packages[]')
+  done < <(get_config_packages)
 }
 
 get_packages_regular() {
@@ -259,7 +263,7 @@ get_packages_regular() {
     if [[ $pack != @* && $pack != -* ]]; then
       echo "$pack"
     fi
-  done < <(get_config '.packages[]')
+  done < <(get_config_packages)
 }
 
 get_disksize() {
@@ -267,6 +271,13 @@ get_disksize() {
   disk=$(get_disk) || return
   bytes=$(lsblk -b -n --filter "PATH == '$disk'" -o SIZE)
   echo $(( bytes / ( 1024 * 1024 ) ))
+}
+
+get_ram_mb() {
+  local kb
+  kb=$(sed -n -E 's/^MemTotal:\s+\b([[:digit:]]+)\b.*\bkB$/\1/p' /proc/meminfo)
+  [[ $kb ]] || return
+  echo $(( kb / 1024 ))
 }
 
 get_only_child() {
@@ -416,26 +427,9 @@ loadkeys_config() {
   chmod u+s $(which loadkeys)
 }
 
-xdg_user_dirs_config() {
-  # make etc/locale.conf a config
-  # use standard names
-  if [[ ! -f /etc/locale.conf ]]; then
-    return 0
-  fi
-  if grep -E 'LANG=.*\ben_US\b.*' /etc/locale.conf; then
-    return 0
-  fi
-  if grep -E 'LANG=.*\bC\b.*' /etc/locale.conf; then
-    return 0
-  fi
-  if [[ ! -f /etc/xdg/user-dirs.conf ]]; then
-    return 0
-  fi
-  sed -i 's/^enabled=.*/enabled=False/' /etc/xdg/user-dirs.conf
-}
-
 configure_hostname() {
-  local hostname="$(get_config .hostname)"
+  local hostname
+  hostname="$(get_config .hostname)"
   if [[ $hostname ]]; then
     hostnamectl hostname $hostname
   elif [[ -f /etc/hostname ]]; then

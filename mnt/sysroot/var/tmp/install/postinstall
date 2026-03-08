@@ -4,6 +4,7 @@
 
 do_postinstall() {
   run set_root_pw || return
+  run create_users || return
   run configure_sdboot || return
   run configure_hostname || return
   run set_target_firstboot || return
