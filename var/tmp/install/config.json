@@ -16,10 +16,12 @@
     },
     "plain_lvm": {
       "banner": "lvm + ext4",
+      "pvname": "pvroot",
+      "vgname": "linux",
       "partition": {
         "efi": "EFISYS",
-        "root": "linux-root",
-        "home": "linux-home"
+        "root": "root",
+        "home": "home"
       }
     }
   },

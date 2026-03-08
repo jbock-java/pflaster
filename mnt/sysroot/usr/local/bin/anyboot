@@ -4,8 +4,8 @@
 
 anyboot() {
   local segment file storage software rc=0
-  storage=$(get_profile storage)
-  software=$(get_profile software)
+  storage=$(get_profile .storage)
+  software=$(get_profile .software)
   [[ $storage ]] || return
   [[ $software ]] || return
   for segment in storage/$storage software/$software; do

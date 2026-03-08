@@ -1,22 +1,21 @@
 #!/bin/bash
 #
-# This runs very early. Before preinstall.
+# This runs very early.
 # Its job is to make sure that the partitions named in the profile config exist,
 # are formatted and labeled, but not mounted yet.
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
 get_pvrootsize() {
-  local disksize efisize=2044
+  local efisize=2044 disksize
   disksize=$(get_disksize)
   echo $(( disksize - efisize - 32 ))
 }
 
 print_parted_commands() {
-  local efisize=2044
-  local pvrootsize=$(get_pvrootsize)
-  local pvname=$(get_config .storage.luks_lvm.pvname)
-  local pos=4
+  local efisize=2044 pos=4 pvrootsize pvname
+  pvrootsize=$(get_pvrootsize)
+  pvname=$(get_config .storage.luks_lvm.pvname)
   echo "mklabel gpt"
   echo "mkpart EFISYS fat32 ${pos}MiB $(( pos + efisize ))MiB"
   (( pos += efisize ))
@@ -29,18 +28,27 @@ ask_new_lukskey() {
   local reply0 reply1
   read -rsp "Choose lukskey: " reply0
   echo
-  (( ${#reply0} >= 8 )) || return $(error "minimum 8 characters")
-  [[ $reply0 = "${reply0// /}" ]] || return $(error "spaces not allowed")
+  (( ${#reply0} >= 8 )) || {
+    echo "minimum 8 characters"
+    return 1
+  }
+  [[ $reply0 = "${reply0// /}" ]] || {
+    echo "spaces not allowed"
+    return 1
+  }
   read -rsp "Confirm lukskey: " reply1
   echo
-  [[ $reply0 = "$reply1" ]] || return $(error "no match")
+  [[ $reply0 = "$reply1" ]] || {
+    echo "no match"
+    return 1
+  }
   echo -n "$reply0" > $installbase/lukskey
   chmod 600 $installbase/lukskey
 }
 
 create_partitions() {
-  local disk part pvroot luksroot rootsize homesize optsize label_home label_opt label_root label_efi pvname vgname
-  local pvrootsize=$(get_pvrootsize)
+  local disk part pvroot pvrootsize luksroot rootsize homesize optsize label_home label_opt label_root label_efi pvname vgname
+  pvrootsize=$(get_pvrootsize)
   pvname=$(get_config .storage.luks_lvm.pvname) || return
   vgname=$(get_config .storage.luks_lvm.vgname) || return
   label_home=$(get_config .storage.luks_lvm.partition.home) || return
@@ -50,7 +58,7 @@ create_partitions() {
   while :; do
     ask_new_lukskey && break
   done
-  disk=$(get_disk) || return $(error "get_disk")
+  disk=$(get_disk) || return
   parted --script --align optimal $disk -- $(print_parted_commands) || return 
   mkfs.vfat -n $label_efi -F 32 $(by_partlabel EFISYS) || return
   pvroot=$(by_partlabel $pvname)

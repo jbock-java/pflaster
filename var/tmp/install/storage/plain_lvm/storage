@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# This runs very early. Before preinstall.
+# This runs very early.
 # Its job is to make sure that the partitions named in the profile config exist,
 # are formatted and labeled, but not mounted yet.
 
@@ -13,58 +13,57 @@ get_pvrootsize() {
 }
 
 print_parted_commands() {
-  local efisize=2044
-  local pvrootsize=$(get_pvrootsize)
-  local pos=4
+  local efisize=2044 pos=4 pvrootsize pvname
+  pvrootsize=$(get_pvrootsize)
+  pvname=$(get_config .storage.plain_lvm.pvname) || return
   echo "mklabel gpt"
   echo "mkpart EFISYS fat32 ${pos}MiB $(( pos + efisize ))MiB"
   (( pos += efisize ))
   echo "set 1 esp on"
-  echo "mkpart pvroot ext4 ${pos}MiB $(( pos + pvrootsize ))MiB"
+  echo "mkpart $pvname ext4 ${pos}MiB $(( pos + pvrootsize ))MiB"
   (( pos += pvrootsize ))
 }
 
 wipe() {
-  local disk part pvroot rootsize homesize label_home label_root label_efi volgs
-  local pvrootsize=$(get_pvrootsize)
+  local disk part pvname vgname pvroot pvrootsize rootsize homesize label_home label_root label_efi volgs
+  pvrootsize=$(get_pvrootsize)
   vgchange -an
+  pvname=$(get_config .storage.plain_lvm.pvname) || return
+  vgname=$(get_config .storage.plain_lvm.vgname) || return
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
   label_root=$(get_config .storage.plain_lvm.partition.root) || return
   label_efi=$(get_config .storage.plain_lvm.partition.efi) || return
-  [[ $label_home = linux-* ]] || return $(error "invalid label: $label_home")
-  [[ $label_root = linux-* ]] || return $(error "invalid label: $label_root")
   disk=$(get_disk) || return
   parted --script --align optimal $disk -- $(print_parted_commands) || return 
   mkfs.vfat -n $label_efi -F 32 $(by_partlabel EFISYS) || return
-  pvroot=$(by_partlabel pvroot) || return
+  pvroot=$(by_partlabel $pvname) || return
   volgs=$(vgs --noheadings | sed -E 's/^\s*\b(\S+)\b.*/\1/')
-  if [[ $volgs = "linux" ]]; then
-    vgremove -f linux
+  if [[ $volgs = "$vgname" ]]; then
+    vgremove -f $vgname
   fi
   pvcreate $pvroot || return
-  vgcreate linux $pvroot || return
+  vgcreate $vgname $pvroot || return
   (( rootsize = pvrootsize / 2 ))
   (( rootsize > 65536 && ( rootsize = 65536 ) ))
   (( rootsize < 8192 && ( rootsize = 8192 ) ))
   (( homesize = pvrootsize - rootsize - 32 ))
   (( homesize > 65536 && ( homesize = 65536 ) ))
   (( homesize >= 1024 )) || return
-  lvcreate -L ${rootsize}M -n ${label_root#linux-} linux || return
-  lvcreate -L ${homesize}M -n ${label_home#linux-} linux || return
-  mkfs.ext4 -q -L $label_root /dev/mapper/$label_root <<< y || return
-  mkfs.ext4 -q -L $label_home /dev/mapper/$label_home <<< y || return
+  lvcreate -L ${rootsize}M -n $label_root $vgname || return
+  lvcreate -L ${homesize}M -n $label_home $vgname || return
+  mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
+  mkfs.ext4 -q -L $vgname-$label_home /dev/mapper/$vgname-$label_home <<< y || return
 }
 
 only_format_root() {
-  local efisys label_home label_root label_efi
+  local vgname efisys label_home label_root label_efi
+  vgname=$(get_config .storage.plain_lvm.vgname) || return
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
   label_root=$(get_config .storage.plain_lvm.partition.root) || return
   label_efi=$(get_config .storage.plain_lvm.partition.efi) || return
-  [[ $label_home = linux-* ]] || return $(error "invalid label: $label_home")
-  [[ $label_root = linux-* ]] || return $(error "invalid label: $label_root")
   efisys=$(blkid --label $label_efi) || return
-  linuxroot=$(blkid --label $label_root) || return
-  mkfs.ext4 -q -L $label_root $linuxroot <<< y || return
+  linuxroot=$(blkid --label $vgname-$label_root) || return
+  mkfs.ext4 -q -L $vgname-$label_root $linuxroot <<< y || return
   mkfs.vfat -n $label_efi -F 32 $efisys || return
 }
 

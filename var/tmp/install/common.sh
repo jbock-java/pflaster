@@ -21,14 +21,12 @@ os_release() {
   sed -n -E 's/^VERSION_ID=(\S+)/\1/p' /etc/os-release
 }
 
-error() {
-  1>&2 echo "ERROR: $@"
-  echo 1
-}
-
 run() {
   echo "Running: $@"
-  "$@" || return $(error "$@")
+  "$@" || {
+    echo "ERROR: $@"
+    return 1
+  }
   if [[ -f /tmp/pause ]]; then
     echo "Halted. Type 'stop -c' to continue."
     sleep inf
@@ -37,14 +35,14 @@ run() {
 }
 
 run_chrooted() {
-  [[ -f $sysroot$installbase/profile.txt ]] || return
+  [[ -f $sysroot$installbase/profile.json ]] || return
   if [[ -f $sysroot$1 ]]; then
     echo "Running: chroot $sysroot $@"
   else
     echo "Not found: $sysroot$1"
     return 0
   fi
-  chroot $sysroot "$@" || return $(error "chroot $sysroot $1")
+  chroot $sysroot "$@" || return
   if [[ -f /tmp/pause ]]; then
     echo "Halted. Type 'stop -c' to continue."
     sleep inf
@@ -53,7 +51,7 @@ run_chrooted() {
 }
 
 run_spawned() {
-  [[ -f $sysroot$installbase/profile.txt ]] || return
+  [[ -f $sysroot$installbase/profile.json ]] || return
   if [[ -f $sysroot$1 ]]; then
     echo "Running: systemd-nspawn -M pflaster -D $sysroot $1"
   else
@@ -69,20 +67,26 @@ run_spawned() {
   echo "OK: systemd-nspawn $sysroot $1"
 }
 
+jqi() {
+  local tfn file=$installbase/profile.json
+  [[ -f $file ]] || { echo "{}" > $file ; }
+  tfn=$(mktemp) || return
+  jq "$@" $file > $tfn || return
+  mv $tfn $file
+}
+
 choose() {
   local what="$1" REPLY choice options=()
   [[ $what ]] || return
   choice=$(getarg pf.$what)
-  touch $installbase/profile.txt
-  sed -i -E "/^$what=.*/d" $installbase/profile.txt
   if [[ $choice ]]; then
-    echo "$what=$choice" >> $installbase/profile.txt
+    jqi ".$what = \"$choice\""
     echo "$what=$choice preselected"
-    return 0
-  elif [[ -f $installbase/profile.txt ]] && grep -q -E "^$what=.*" $installbase/profile.txt; then
-    choice=$(sed -n -E "s|^$what=(.*)\\$|\\1|p" $installbase/profile.txt)
-    read -rp "$what=$choice <- keep this choice? [n/Y] "
-    [[ -z $REPLY || $REPLY =~ [yY] ]] && return 0
+    return
+  elif [[ -f $installbase/profile.json ]] && jq -e "has(\"$what\")" $installbase/profile.json > /dev/null; then
+    choice=$(jq -r ".$what" $installbase/profile.json)
+    read -rp "$what=$choice <- keep this choice? [Y/n] "
+    [[ -z $REPLY || $REPLY =~ [yY] ]] && return
   fi
   for choice in $(jq -r ".$what | keys[]" $installbase/config.json); do
     options+=($choice)
@@ -93,8 +97,9 @@ choose() {
       return 1
       ;;
     1)
-      echo "$what=${options[@]}" >> $installbase/profile.txt
-      return 0
+      jqi ".$what = \"${options[@]}\""
+      echo "$what=${options[@]} is the only option"
+      return
       ;;
     *)
       local col=0
@@ -118,7 +123,7 @@ choose() {
         if (( matches == 0 )); then
           echo "No such $what: $REPLY"
         elif (( matches == 1 )); then
-          echo "$what=$remember" >> $installbase/profile.txt
+          jqi ".$what = \"$remember\""
           echo "$what=$remember selected"
           return 0
         else
@@ -131,8 +136,8 @@ choose() {
 
 get_profile() {
   [[ $1 ]] || return
-  [[ -f $installbase/profile.txt ]] || return
-  sed -n -E "s/^$1=(.*)/\\1/p" $installbase/profile.txt
+  [[ -f $installbase/profile.json ]] || return
+  jq -r "$1" $installbase/profile.json
 }
 
 remount() {
@@ -259,18 +264,21 @@ get_packages_regular() {
 
 get_disksize() {
   local disk bytes
-  disk=$(get_disk) || return $(error "get_disk")
+  disk=$(get_disk) || return
   bytes=$(lsblk -b -n --filter "PATH == '$disk'" -o SIZE)
   echo $(( bytes / ( 1024 * 1024 ) ))
 }
 
 get_only_child() {
-  [[ $1 ]] || return $(error "param: PATH")
+  [[ $1 ]] || return
   local kname children
   kname=$(lsblk -n --filter "PATH == '$1'" -o KNAME)
   children=$(lsblk -n --filter "PKNAME == '$kname'" -o PATH | tr '\n' ' ')
   children=${children% }
-  [[ $children = "${children// /}" ]] || return $(error "more than one child")
+  [[ $children = "${children// /}" ]] || {
+    echo "ERROR: more than one child"
+    return 1
+  }
   echo $children
 }
 
@@ -366,7 +374,7 @@ set_rtc_utc() {
 
 set_target_anyboot() {
   local target software
-  software=$(get_profile software)
+  software=$(get_profile .software)
   if [[ $software ]]; then
     target=$(get_config ".software.$software.target")
   fi
@@ -375,7 +383,7 @@ set_target_anyboot() {
 
 set_target_firstboot() {
   [[ -f /usr/share/systemux/tmux.conf ]] || return
-  local software=$(get_profile software)
+  local software=$(get_profile .software)
   [[ $software ]] || return
   systemctl set-default firstboot.target
   set_permissive
@@ -433,6 +441,7 @@ configure_hostname() {
   elif [[ -f /etc/hostname ]]; then
     hostnamectl hostname $(< /etc/hostname)
   else
-    false || return $(error "hostname not configured")
+    echo "ERROR: hostname not configured"
+    return 1
   fi
 }

@@ -19,7 +19,7 @@ umount_misc() {
 }
 
 postmount_script() {
-  local storage=$(get_profile storage)
+  local storage=$(get_profile .storage)
   [[ $storage ]] || return
   local script=$installbase/storage/$storage/postmount
   if [[ ! -f $script ]]; then
@@ -31,7 +31,7 @@ postmount_script() {
 
 mount_rootfs() {
   local label device storage vgname
-  storage=$(get_profile storage)
+  storage=$(get_profile .storage)
   [[ $storage ]] || return
   label=$(get_config ".storage.$storage.partition.root")
   vgname=$(get_config ".storage.$storage.vgname")
@@ -44,7 +44,7 @@ mount_rootfs() {
 
 mount_home() {
   local label device storage vgname
-  storage=$(get_profile storage)
+  storage=$(get_profile .storage)
   [[ $storage ]] || return
   label=$(get_config ".storage.$storage.partition.home")
   vgname=$(get_config ".storage.$storage.vgname")
@@ -57,7 +57,7 @@ mount_home() {
 
 mount_opt() {
   local label device storage vgname
-  storage=$(get_profile storage)
+  storage=$(get_profile .storage)
   [[ $storage ]] || return
   label=$(get_config ".storage.$storage.partition.opt")
   [[ $label ]] || return 0
@@ -71,7 +71,7 @@ mount_opt() {
 
 mount_efisys() {
   local label device storage
-  storage=$(get_profile storage)
+  storage=$(get_profile .storage)
   [[ $storage ]] || return
   label=$(get_config ".storage.$storage.partition.efi")
   device=$(blkid --label $label) || return
@@ -131,8 +131,8 @@ copy_common() {
 
 copy_profile() {
   mkdir -p $sysroot$installbase
-  [[ -f $installbase/profile.txt ]] || return
-  cp $installbase/profile.txt $sysroot$installbase
+  [[ -f $installbase/profile.json ]] || return
+  cp $installbase/profile.json $sysroot$installbase
 }
 
 install_kernel() {
@@ -140,7 +140,7 @@ install_kernel() {
 }
 
 storage_script() {
-  local storage=$(get_profile storage)
+  local storage=$(get_profile .storage)
   [[ $storage ]] || return
   local script=$installbase/storage/$storage/storage
   [[ -f $script ]] || return
@@ -148,8 +148,8 @@ storage_script() {
 }
 
 run_hook_chrooted() {
-  local storage=$(get_profile storage)
-  local software=$(get_profile software)
+  local storage=$(get_profile .storage)
+  local software=$(get_profile .software)
   [[ $storage ]] || return
   [[ $software ]] || return
   run_chrooted $installbase/$1 || return
@@ -175,7 +175,8 @@ configure() {
     choose storage
     choose software
     echo "Installation target: $(get_disk)"
-    cat $installbase/profile.txt
+    echo "$installbase/profile.json:"
+    jq -M . $installbase/profile.json
     read -rp "Is this correct? [Y/n] "
     if [[ -z $REPLY ]] || [[ $REPLY =~ [yY] ]]; then
       return 0
@@ -198,7 +199,7 @@ boot_loader_entry() {
     return 0
   fi
   local storage label uuid partuuid partnum
-  local storage=$(get_profile storage)
+  local storage=$(get_profile .storage)
   [[ $storage ]] || return
   label=$(get_config .storage.$storage.partition.efi)
   [[ $label ]] || return
