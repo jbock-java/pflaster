@@ -29,17 +29,17 @@ ask_new_lukskey() {
   read -rsp "Choose lukskey: " reply0
   echo
   (( ${#reply0} >= 8 )) || {
-    echo "minimum 8 characters"
+    echo "ERROR: minimum 8 characters"
     return 1
   }
   [[ $reply0 = "${reply0// /}" ]] || {
-    echo "spaces not allowed"
+    echo "ERROR: spaces not allowed"
     return 1
   }
   read -rsp "Confirm lukskey: " reply1
   echo
   [[ $reply0 = "$reply1" ]] || {
-    echo "no match"
+    echo "ERROR: no match"
     return 1
   }
   echo -n "$reply0" > $installbase/lukskey
@@ -151,7 +151,6 @@ preserve_home() {
   if [[ ! -e /dev/mapper/$vgname-$label_root ]]; then
     rootsize=$(sensible_rootsize) || return
     lvcreate --size ${rootsize}M --name $label_root $vgname || return
-    mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
   fi
   mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
   if [[ -n $label_opt && ! -e /dev/mapper/$vgname-$label_opt ]]; then

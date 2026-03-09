@@ -16,10 +16,7 @@ firstboot_script() {
 }
 
 return 2> /dev/null || {
-  echo Running: $0
-  set -o pipefail
-  mkdir -p /var/log/pflaster
-  firstboot_script 2>&1 | tee /var/log/pflaster/firstboot.txt
+  firstboot_script
 }
 
 :

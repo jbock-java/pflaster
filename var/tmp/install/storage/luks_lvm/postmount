@@ -1,7 +1,4 @@
 #!/bin/bash
-#
-# A profile may or may not have this file.
-# If it exists, it runs after "sysroot" is mounted.
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 

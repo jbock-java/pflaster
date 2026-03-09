@@ -26,7 +26,11 @@ firstboot() {
 }
 
 return 2> /dev/null || {
-  firstboot || {
+  export NO_COLOR=1
+  set -o pipefail
+  mkdir -p /var/log/pflaster
+  echo Running: $0
+  firstboot 2>&1 | tee /var/log/pflaster/firstboot.txt || {
     echo "Halted after error."
     sleep inf
   }

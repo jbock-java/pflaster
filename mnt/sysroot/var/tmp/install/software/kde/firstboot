@@ -13,7 +13,6 @@ install_more_groups() {
   echo "dnf install group ${groups[@]}"
   dnf -qy --color=never \
       -x PackageKit-command-not-found \
-      -x xdg-user-dirs \
       -x ksshaskpass \
       -x plasma-welcome \
       -x fedora-workstation-repositories \
@@ -75,9 +74,16 @@ disable_updates() {
 
 enable_updates() {
   enable_repo fedora-updates.repo
-  enable_repo fedora-updates-testing.repo
   enable_repo rpmfusion-free-updates.repo
-  enable_repo rpmfusion-free-updates-testing.repo
+}
+
+xdg_user_dirs_config() {
+  if [[ -f /etc/xdg/user-dirs.conf ]]; then
+    sed -i 's/^enabled=.*/enabled=False/' /etc/xdg/user-dirs.conf
+  else
+    mkdir -p /etc/xdg
+    echo "enabled=False" > /etc/xdg/user-dirs.conf
+  fi
 }
 
 firstboot_script() {
@@ -88,15 +94,13 @@ firstboot_script() {
   run disable_updates || return
   run install_more_software || return
   run enable_updates || return
+  run xdg_user_dirs_config || return
   run set_enforcing || return
   run trigger_autorelabel || return
 }
 
 return 2> /dev/null || {
-  echo Running: $0
-  set -o pipefail
-  mkdir -p /var/log/pflaster
-  firstboot_script 2>&1 | tee /var/log/pflaster/firstboot.txt
+  firstboot_script
 }
 
 :
