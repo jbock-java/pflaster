@@ -51,6 +51,7 @@ print_cmdline_options() {
   echo "rd.luks.uuid=$uuid_pvroot"
   echo "rd.lvm.vg=$vgname"
   echo "rd.shell"
+  echo "hibernate=no"
 }
 
 configure_cmdline() {

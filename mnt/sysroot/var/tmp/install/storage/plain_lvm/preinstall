@@ -40,6 +40,7 @@ print_cmdline_options() {
   echo "root=UUID=$uuid_root"
   echo "rd.lvm.vg=$vgname"
   echo "rd.shell"
+  echo "hibernate=no"
 }
 
 configure_cmdline() {
