@@ -109,7 +109,49 @@ sensible_rootsize() {
   echo $rootsize
 }
 
+preserve_home_tasks() {
+  local vgname efisys label_home label_root label_efi label_swap swapsize rootsize acc="[]"
+  vgname=$(get_config .storage.plain_lvm.vgname) || return
+  label_home=$(get_config .storage.plain_lvm.partition.home) || return
+  label_root=$(get_config .storage.plain_lvm.partition.root) || return
+  label_efi=$(get_config .storage.plain_lvm.partition.efi) || return
+  label_swap=$(get_config .storage.plain_lvm.partition.swap) || return
+  efisys=$(blkid --label $label_efi)
+  if [[ ! -e /dev/mapper/$vgname-$label_home ]]; then
+    return 1 
+  fi
+  acc=$(jm "$acc" task=preserve dev=/dev/mapper/$vgname-$label_home t=ext4 label=$vgname-$label_home)
+  if [[ $efisys ]]; then
+    acc=$(jm "$acc" task=wipe dev=$efisys t=efi)
+  else
+    acc=$(jm "$acc" task=create t=efi)
+  fi
+  if [[ -e /dev/mapper/$vgname-$label_root ]]; then
+    acc=$(jm "$acc" task=wipe dev=/dev/mapper/$vgname-$label_root t=ext4)
+  else
+    rootsize=$(sensible_rootsize) || return
+    acc=$(jm "$acc" task=create size=$rootsize t=ext4 "$acc")
+  fi
+  if [[ -e /dev/mapper/$vgname-$label_swap ]]; then
+    acc=$(jm "$acc" task=preserve dev=/dev/mapper/$vgname-$label_swap)
+  else
+    swapsize=$(get_ram_mb) || return
+    (( swapsize += 2048 ))
+    acc=$(jm "$acc" task=create size=$swapsize t=swap)
+  fi
+  jq -cM ".[]" <<< "$acc"
+}
+
+run_task() {
+  echo "running task: $1"
+}
+
 preserve_home() {
+  local task tasks
+  tasks="$(preserve_home_tasks)" || return
+  while read -r task; do
+    run_task "$task"
+  done <<< "$tasks"
   local vgname efisys label_home label_root label_efi label_swap swapsize rootsize
   vgname=$(get_config .storage.plain_lvm.vgname) || return
   label_home=$(get_config .storage.plain_lvm.partition.home) || return

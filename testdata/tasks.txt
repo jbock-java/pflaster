@@ -1,0 +1,2 @@
+{"type":"home","task":"preserve","device":"/dev/mapper/linux-home","label":"linux-home"}
+{"type":"efi","task":"create","device":""}
