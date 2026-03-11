@@ -178,7 +178,7 @@ configure() {
     echo "$installbase/profile.json:"
     jq -M . $installbase/profile.json
     read -rp "Is this correct? [Y/n] "
-    if [[ -z $REPLY ]] || [[ $REPLY =~ [yY] ]]; then
+    if [[ -z $REPLY || $REPLY =~ [yY] ]]; then
       return 0
     fi
   done

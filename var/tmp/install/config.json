@@ -20,7 +20,6 @@
     },
     "plain_lvm": {
       "banner": "For resource constrained machines. lvm + ext4.",
-      "pvname": "pvroot",
       "vgname": "linux",
       "partition": {
         "efi": "EFISYS",
