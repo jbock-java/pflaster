@@ -455,3 +455,94 @@ jm() {
     return 1
   fi
 }
+
+storage_task_preserve() {
+  local label dev t
+  label=$(jq -r ".label | select(. != null)" <<< "$1")
+  [[ $label ]] || return 0
+  dev=$(jq -r ".dev | select(. != null)" <<< "$1")
+  t=$(jq -r ".t | select(. != null)" <<< "$1")
+  if [[ $t = "ext4" && $(e2label $dev) != "$label" ]]; then
+    e2label $dev $label || return
+  fi
+}
+
+storage_task_wipe() {
+  local label dev t
+  label=$(jq -r ".label | select(. != null)" <<< "$1")
+  [[ $label ]] || return
+  dev=$(jq -r ".dev | select(. != null)" <<< "$1")
+  t=$(jq -r ".t | select(. != null)" <<< "$1")
+  case $t in
+    efi)
+      mkfs.vfat -n $label -F 32 $dev || return
+      ;;
+    ext4)
+      mkfs.ext4 -q -L $label $dev <<< y || return
+      ;;
+    *)
+      echo "unknown type: $1"
+      return 1
+      ;;
+  esac
+}
+
+storage_task_create() {
+  local label dev t size vgname
+  label=$(jq -r ".label | select(. != null)" <<< "$1")
+  dev=$(jq -r ".dev | select(. != null)" <<< "$1")
+  t=$(jq -r ".t | select(. != null)" <<< "$1")
+  size=$(jq -r ".size | select(. != null)" <<< "$1")
+  vgname=$(jq -r ".vgname | select(. != null)" <<< "$1")
+  [[ $label ]] || return
+  [[ $size ]] || return
+  [[ $vgname ]] || return
+  lvcreate --size ${size}M --name $label $vgname || return
+  if [[ $t = "ext4" ]]; then
+    mkfs.ext4 -q -L $label $dev <<< y || return
+  fi
+}
+
+run_storage_task() {
+  echo "Running task: $1"
+  local task
+  task=$(jq -r .task <<< "$1")
+  case $task in
+    preserve)
+      storage_task_preserve "$1"
+      return
+      ;;
+    wipe)
+      storage_task_wipe "$1"
+      return
+      ;;
+    create)
+      storage_task_create "$1"
+      return
+      ;;
+    *)
+      echo "unknown task: $1"
+      return 1
+      ;;
+  esac
+}
+
+run_storage_tasks() {
+  local tasks="$1"
+  local m n tasks
+  while :; do
+    echo "Partitioning tasks:"
+    (( n = 1 ))
+    while read -r m; do
+      echo "$n. $m"
+      (( n++ ))
+    done <<< "$tasks"
+    read -rp "OK to run these tasks? [y/N] "
+    if [[ $REPLY =~ [yY] ]]; then
+      break
+    fi
+  done
+  while read -r m; do
+    run_storage_task "$m" || return
+  done <<< "$tasks"
+}
