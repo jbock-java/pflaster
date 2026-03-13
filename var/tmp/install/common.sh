@@ -499,9 +499,18 @@ storage_task_create() {
   [[ $size ]] || return
   [[ $vgname ]] || return
   lvcreate --size ${size}M --name $name $vgname || return
-  if [[ $t = "ext4" ]]; then
-    mkfs.ext4 -q -L $vgname-$name /dev/mapper/$vgname-$name <<< y || return
-  fi
+  case $t in
+    swap)
+      mkswap /dev/mapper/$vgname-$name
+      ;;
+    ext4)
+      mkfs.ext4 -q -L $vgname-$name /dev/mapper/$vgname-$name <<< y || return
+      ;;
+    *)
+      echo "can't create: $1"
+      return 1
+      ;;
+  esac
 }
 
 run_storage_task() {

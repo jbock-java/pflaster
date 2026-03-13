@@ -23,8 +23,8 @@ print_parted_commands() {
   (( pos += pvrootsize ))
 }
 
-create_partitions() {
-  local disk vgname pvroot pvrootsize rootsize homesize swapsize label_home label_root label_efi label_swap vg max_swapsize
+create_basic_partitions() {
+  local disk vgname pvroot pvrootsize vg
   vgname=$(get_config .storage.plain_lvm.vgname) || return
   vgchange -an $vgname || return
   for vg in $(vgs --noheadings | sed -E 's/^\s*\b(\S+)\b.*/\1/'); do
@@ -32,6 +32,17 @@ create_partitions() {
       vgremove -f $vgname || return
     fi
   done
+  pvrootsize=$(get_pvrootsize)
+  disk=$(get_disk) || return
+  parted --script --align optimal $disk -- $(print_parted_commands) || return 
+  pvroot=$(by_partlabel pvroot) || return
+  pvcreate $pvroot || return
+  vgcreate $vgname $pvroot || return
+}
+
+create_partitions_tasks() {
+  local vgname pvrootsize rootsize homesize swapsize label_home label_root label_efi label_swap max_swapsize acc="[]"
+  vgname=$(get_config .storage.plain_lvm.vgname) || return
   max_swapsize=$(get_ram_mb) || return
   (( max_swapsize += 2048 ))
   pvrootsize=$(get_pvrootsize)
@@ -39,12 +50,6 @@ create_partitions() {
   label_root=$(get_config .storage.plain_lvm.partition.root) || return
   label_swap=$(get_config .storage.plain_lvm.partition.swap) || return
   label_efi=$(get_config .storage.plain_lvm.partition.efi) || return
-  disk=$(get_disk) || return
-  parted --script --align optimal $disk -- $(print_parted_commands) || return 
-  mkfs.vfat -n $label_efi -F 32 $(by_partlabel EFISYS) || return
-  pvroot=$(by_partlabel pvroot) || return
-  pvcreate $pvroot || return
-  vgcreate $vgname $pvroot || return
   (( swapsize = 1024 ))
   (( rootsize = pvrootsize / 2 ))
   (( rootsize > 65536 && ( rootsize = 65536 ) ))
@@ -60,12 +65,10 @@ create_partitions() {
     (( swapsize > max_swapsize && ( swapsize = max_swapsize ) ))
   fi
   (( homesize >= 1024 )) || return
-  lvcreate --size ${rootsize}M --name $label_root $vgname || return
-  lvcreate --size ${homesize}M --name $label_home $vgname || return
-  lvcreate --size ${swapsize}M --name $label_swap $vgname || return
-  mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
-  mkfs.ext4 -q -L $vgname-$label_home /dev/mapper/$vgname-$label_home <<< y || return
-  mkswap /dev/mapper/$vgname-$label_swap
+  acc=$(jm "$acc" task=wipe dev=$(by_partlabel EFISYS) t=efi label=$label_efi)
+  acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname name=$label_root)
+  acc=$(jm "$acc" task=create size=$homesize t=ext4 vgname=$vgname name=$label_home)
+  acc=$(jm "$acc" task=create size=$swapsize t=swap vgname=$vgname name=$label_swap)
 }
 
 wipe() {
@@ -79,7 +82,8 @@ wipe() {
       sleep inf
     fi
   done
-  create_partitions
+  create_basic_partitions || return
+  run_storage_tasks "$(create_partitions_tasks)"
 }
 
 sensible_rootsize() {
@@ -122,7 +126,7 @@ preserve_home_tasks() {
     acc=$(jm "$acc" task=wipe dev=/dev/mapper/$vgname-$label_root t=ext4 label=$vgname-$label_root)
   else
     rootsize=$(sensible_rootsize) || return
-    acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname label=$vgname-$label_root)
+    acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname name=$label_root)
   fi
   if [[ -e /dev/mapper/$vgname-$label_swap ]]; then
     acc=$(jm "$acc" task=preserve dev=/dev/mapper/$vgname-$label_swap t=swap)
