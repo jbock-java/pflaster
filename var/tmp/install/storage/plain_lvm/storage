@@ -64,11 +64,16 @@ create_partitions_tasks() {
     (( homesize = 262144 ))
     (( swapsize > max_swapsize && ( swapsize = max_swapsize ) ))
   fi
+  if (( homesize < 16384 )); then
+    (( homesize += swapsize ))
+    (( swapsize = 0 ))
+  fi
   (( homesize >= 1024 )) || return
   acc=$(jm "$acc" task=wipe dev=$(by_partlabel EFISYS) t=efi label=$label_efi)
   acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname name=$label_root)
   acc=$(jm "$acc" task=create size=$homesize t=ext4 vgname=$vgname name=$label_home)
   acc=$(jm "$acc" task=create size=$swapsize t=swap vgname=$vgname name=$label_swap)
+  jq -cM ".[]" <<< "$acc"
 }
 
 wipe() {

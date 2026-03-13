@@ -498,7 +498,8 @@ storage_task_create() {
   [[ $name ]] || return
   [[ $size ]] || return
   [[ $vgname ]] || return
-  lvcreate --size ${size}M --name $name $vgname || return
+  (( size == 0 )) && return
+  lvcreate -qy --size ${size}M --name $name $vgname || return
   case $t in
     swap)
       mkswap /dev/mapper/$vgname-$name
@@ -560,7 +561,7 @@ run_storage_tasks() {
       echo "$n. $m"
       (( n++ ))
     done <<< "$tasks"
-    read -rp "OK to run these tasks? [y/N] "
+    read -rp "Proceed with these tasks? [y/N] "
     if [[ $REPLY =~ [yY] ]]; then
       break
     fi
