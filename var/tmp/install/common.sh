@@ -490,17 +490,17 @@ storage_task_wipe() {
 }
 
 storage_task_create() {
-  local label t size vgname
-  label=$(jq -r ".label | select(. != null)" <<< "$1")
+  local name t size vgname
+  name=$(jq -r ".name | select(. != null)" <<< "$1")
   t=$(jq -r ".t | select(. != null)" <<< "$1")
   size=$(jq -r ".size | select(. != null)" <<< "$1")
   vgname=$(jq -r ".vgname | select(. != null)" <<< "$1")
-  [[ $label ]] || return
+  [[ $name ]] || return
   [[ $size ]] || return
   [[ $vgname ]] || return
-  lvcreate --size ${size}M --name $label $vgname || return
+  lvcreate --size ${size}M --name $name $vgname || return
   if [[ $t = "ext4" ]]; then
-    mkfs.ext4 -q -L $label /dev/$vgname/$label <<< y || return
+    mkfs.ext4 -q -L $vgname-$name /dev/mapper/$vgname-$name <<< y || return
   fi
 }
 

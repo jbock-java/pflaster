@@ -89,10 +89,10 @@ create_partitions_tasks() {
   (( homesize > 262144 && ( homesize = 262144 ) ))
   (( homesize >= 1024 )) || return
   acc=$(jm "$acc" task=wipe dev=$(by_partlabel EFISYS) t=efi label=$label_efi)
-  acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname label=$vgname-$label_root)
-  acc=$(jm "$acc" task=create size=$homesize t=ext4 vgname=$vgname label=$vgname-$label_home)
+  acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname name=$label_root)
+  acc=$(jm "$acc" task=create size=$homesize t=ext4 vgname=$vgname name=$label_home)
   if [[ $label_opt ]]; then
-    acc=$(jm "$acc" task=create size=$optsize t=ext4 vgname=$vgname label=$vgname-$label_opt)
+    acc=$(jm "$acc" task=create size=$optsize t=ext4 vgname=$vgname name=$label_opt)
   fi
   jq -cM ".[]" <<< "$acc"
 }
@@ -156,49 +156,18 @@ preserve_home_tasks() {
     acc=$(jm "$acc" task=wipe dev=/dev/mapper/$vgname-$label_root t=ext4 label=$vgname-$label_root)
   else
     rootsize=$(sensible_rootsize) || return
-    acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname label=$vgname-$label_root)
+    acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname name=$label_root)
   fi
   if [[ $label_opt ]]; then
     if [[ -e /dev/mapper/$vgname-$label_opt ]]; then
       acc=$(jm "$acc" task=preserve dev=/dev/mapper/$vgname-$label_opt t=ext4 label=$vgname-$label_opt)
     else
       (( optsize = 32768 ))
-      acc=$(jm "$acc" task=create size=$optsize t=ext4 vgname=$vgname label=$vgname-$label_opt)
+      acc=$(jm "$acc" task=create size=$optsize t=ext4 vgname=$vgname name=$label_opt)
     fi
   fi
   acc=$(jm "$acc" task=preserve dev=/dev/mapper/$vgname-$label_home t=ext4 label=$vgname-$label_home)
   jq -cM ".[]" <<< "$acc"
-}
-
-preserve_home() {
-  [[ -f $installbase/lukskey ]] || return 1
-  local pvroot luks_root efisys label_home label_opt label_root label_efi pvname vgname rootsize optsize
-  pvname=$(get_config .storage.luks_lvm.pvname) || return
-  vgname=$(get_config .storage.luks_lvm.vgname) || return
-  label_home=$(get_config .storage.luks_lvm.partition.home) || return
-  label_opt=$(get_config .storage.luks_lvm.partition.opt)
-  label_root=$(get_config .storage.luks_lvm.partition.root) || return
-  label_efi=$(get_config .storage.luks_lvm.partition.efi) || return
-  efisys=$(blkid --label $label_efi) || return
-  pvroot=$(blkid --label $pvname) || return
-  cryptsetup luksOpen -q --disable-external-tokens --key-file $installbase/lukskey $pvroot $vgname || return
-  vgchange -ay $vgname
-  [[ -e /dev/mapper/$vgname-$label_home ]] || return
-  if [[ ! -e /dev/mapper/$vgname-$label_root ]]; then
-    rootsize=$(sensible_rootsize) || return
-    lvcreate --size ${rootsize}M --name $label_root $vgname || return
-  fi
-  mkfs.ext4 -q -L $vgname-$label_root /dev/mapper/$vgname-$label_root <<< y || return
-  if [[ -n $label_opt && ! -e /dev/mapper/$vgname-$label_opt ]]; then
-    (( optsize = 32768 ))
-    lvcreate --size ${optsize}M --name $label_opt $vgname || return
-    mkfs.ext4 -q -L $vgname-$label_opt /dev/mapper/$vgname-$label_opt <<< y || return
-  fi
-  e2label /dev/mapper/$vgname-$label_home $vgname-$label_home || return
-  if [[ -e /dev/mapper/$vgname-$label_opt ]]; then
-    e2label /dev/mapper/$vgname-$label_opt $vgname-$label_opt || return
-  fi
-  mkfs.vfat -n $label_efi -F 32 $efisys || return
 }
 
 wipe() {
