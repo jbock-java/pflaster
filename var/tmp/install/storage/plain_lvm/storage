@@ -35,6 +35,7 @@ create_basic_partitions() {
   pvrootsize=$(get_pvrootsize)
   disk=$(get_disk) || return
   parted --script --align optimal $disk -- $(print_parted_commands) || return 
+  sleep 5
   pvroot=$(by_partlabel pvroot) || return
   pvcreate $pvroot || return
   vgcreate $vgname $pvroot || return
@@ -43,27 +44,19 @@ create_basic_partitions() {
 create_partitions_tasks() {
   local vgname pvrootsize rootsize homesize swapsize label_home label_root label_efi label_swap max_swapsize acc="[]"
   vgname=$(get_config .storage.plain_lvm.vgname) || return
-  max_swapsize=$(get_ram_mb) || return
-  (( max_swapsize += 2048 ))
+  swapsize=$(get_ram_mb) || return
+  (( swapsize += 2048 ))
   pvrootsize=$(get_pvrootsize)
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
   label_root=$(get_config .storage.plain_lvm.partition.root) || return
   label_swap=$(get_config .storage.plain_lvm.partition.swap) || return
   label_efi=$(get_config .storage.plain_lvm.partition.efi) || return
-  (( swapsize = 1024 ))
-  (( rootsize = pvrootsize / 2 ))
-  (( rootsize > 65536 && ( rootsize = 65536 ) ))
-  (( rootsize < 8192 && ( rootsize = 8192 ) ))
-  (( homesize = pvrootsize / 2 ))
+  (( rootsize = 32768 ))
+  (( homesize = ( pvrootsize * 4 ) / 5 ))
   while (( homesize + swapsize + rootsize + 64 > pvrootsize )); do
     (( homesize -= 16 ))
     (( rootsize > 9216 && ( rootsize -= 16 ) ))
   done
-  if (( homesize > 262144 )); then
-    (( swapsize += ( homesize - 262144 ) ))
-    (( homesize = 262144 ))
-    (( swapsize > max_swapsize && ( swapsize = max_swapsize ) ))
-  fi
   if (( homesize < 16384 )); then
     (( homesize += swapsize ))
     (( swapsize = 0 ))
@@ -144,10 +137,12 @@ preserve_home_tasks() {
 }
 
 prepare_partitions() {
-  local dev label_home pv_found vgname REPLY
+  local dev disk label_home vgname kname REPLY
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
+  disk=$(get_disk) || return
+  kname=$(lsblk -n --filter "PATH == \"$disk\"" -o KNAME)
   vgname=$(get_config .storage.plain_lvm.vgname) || return
-  for dev in $(lsblk -n --filter 'FSTYPE == "LVM2_member"' -o PATH); do
+  for dev in $(lsblk -n --filter "FSTYPE == \"LVM2_member\" && PKNAME == \"$kname\"" -o PATH); do
     if pvs --devices $dev --reportformat json_std | jq -e ".report[].pv[]| select (.vg_name == \"$vgname\")" > /dev/null; then
       vgchange --devices $dev -ay $vgname || return
       break

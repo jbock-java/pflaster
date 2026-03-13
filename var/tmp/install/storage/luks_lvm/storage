@@ -55,6 +55,7 @@ create_basic_partitions() {
   done
   disk=$(get_disk) || return
   parted --script --align optimal $disk -- $(print_parted_commands) || return 
+  sleep 5
   pvroot=$(by_partlabel $pvname)
   cryptsetup luksFormat --force-password --batch-mode $pvroot $installbase/lukskey || return
   cryptsetup luksOpen --batch-mode --key-file=$installbase/lukskey $pvroot $vgname || return
