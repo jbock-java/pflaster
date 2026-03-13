@@ -451,6 +451,8 @@ jm() {
     jq -cM ". += [{\"${1%=*}\":\"${1#*=}\",\"${2%=*}\":\"${2#*=}\",\"${3%=*}\":\"${3#*=}\"}]" <<< "$acc"
   elif (( $# == 4 )); then
     jq -cM ". += [{\"${1%=*}\":\"${1#*=}\",\"${2%=*}\":\"${2#*=}\",\"${3%=*}\":\"${3#*=}\",\"${4%=*}\":\"${4#*=}\"}]" <<< "$acc"
+  elif (( $# == 5 )); then
+    jq -cM ". += [{\"${1%=*}\":\"${1#*=}\",\"${2%=*}\":\"${2#*=}\",\"${3%=*}\":\"${3#*=}\",\"${4%=*}\":\"${4#*=}\",\"${5%=*}\":\"${5#*=}\"}]" <<< "$acc"
   else
     return 1
   fi
@@ -488,9 +490,8 @@ storage_task_wipe() {
 }
 
 storage_task_create() {
-  local label dev t size vgname
+  local label t size vgname
   label=$(jq -r ".label | select(. != null)" <<< "$1")
-  dev=$(jq -r ".dev | select(. != null)" <<< "$1")
   t=$(jq -r ".t | select(. != null)" <<< "$1")
   size=$(jq -r ".size | select(. != null)" <<< "$1")
   vgname=$(jq -r ".vgname | select(. != null)" <<< "$1")
@@ -499,7 +500,7 @@ storage_task_create() {
   [[ $vgname ]] || return
   lvcreate --size ${size}M --name $label $vgname || return
   if [[ $t = "ext4" ]]; then
-    mkfs.ext4 -q -L $label $dev <<< y || return
+    mkfs.ext4 -q -L $label /dev/$vgname/$label <<< y || return
   fi
 }
 

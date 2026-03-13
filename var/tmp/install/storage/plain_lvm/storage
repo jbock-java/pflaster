@@ -122,7 +122,7 @@ preserve_home_tasks() {
     acc=$(jm "$acc" task=wipe dev=/dev/mapper/$vgname-$label_root t=ext4 label=$vgname-$label_root)
   else
     rootsize=$(sensible_rootsize) || return
-    acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname)
+    acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname label=$vgname-$label_root)
   fi
   if [[ -e /dev/mapper/$vgname-$label_swap ]]; then
     acc=$(jm "$acc" task=preserve dev=/dev/mapper/$vgname-$label_swap t=swap)
