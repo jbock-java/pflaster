@@ -3,8 +3,10 @@
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
 disable_zram() {
-  mkdir -p /etc/systemd
-  touch /etc/systemd/zram-generator.conf
+  if [[ -e /dev/mapper/$vgname-$label_swap ]]; then
+    mkdir -p /etc/systemd
+    touch /etc/systemd/zram-generator.conf
+  fi
 }
 
 do_postinstall() {

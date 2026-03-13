@@ -15,15 +15,17 @@ print_fstab() {
   uuid_efi=$(get_uuid $label_efi)
   uuid_root=$(get_uuid $vgname-$label_root)
   uuid_home=$(get_uuid $vgname-$label_home)
-  uuid_swap=$(lsblk -n -o UUID /dev/mapper/$vgname-$label_swap)
   [[ $uuid_efi ]] || return
   [[ $uuid_root ]] || return
   [[ $uuid_home ]] || return
-  [[ $uuid_swap ]] || return
   echo "UUID=$uuid_efi  /boot/efi vfat umask=0077,shortname=winnt 0 2"
   echo "UUID=$uuid_root /         ext4 defaults 1 2"
   echo "UUID=$uuid_home /home     ext4 defaults 1 2"
-  echo "UUID=$uuid_swap swap      swap defaults 0 0"
+  if [[ -e /dev/mapper/$vgname-$label_swap ]]; then
+    uuid_swap=$(lsblk -n -o UUID /dev/mapper/$vgname-$label_swap)
+    [[ $uuid_swap ]] || return
+    echo "UUID=$uuid_swap swap      swap defaults 0 0"
+  fi
 }
 
 configure_fstab() {

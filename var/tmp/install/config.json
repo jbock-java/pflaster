@@ -28,8 +28,7 @@
         "home": "home"
       },
       "packages": [
-        "lvm2",
-        "-zram-generator-defaults"
+        "lvm2"
       ]
     }
   },
