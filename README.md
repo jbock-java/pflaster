@@ -8,21 +8,21 @@
 
 ### Goals
 
-1. The installed system should behave like any other fedora installation.
-2. [support LUKS devices that are unlocked outside the installer](https://bugzilla.redhat.com/show_bug.cgi?id=2019455)
-3. Automatic disk unlocking via tpm should work out of the box.
+1. The user chooses storage profile and software selection.
+2. Have a storage profile that [support LUKS devices that are unlocked outside the installer](https://bugzilla.redhat.com/show_bug.cgi?id=2019455)
+3. Have a storage profile that supports automatic disk unlocking via tpm.
 4. systemd-boot by default
-5. Focus on unattended installation.
+5. The installer will pause and ask for confirmation, before making any changes to the partitioning.
 
 ### Architectural overview
 
-* We use the "Everything" fedora spin.
-* Anaconda is used, but only as an entry point. In kickstart terms: the entire installation happens in "%pre".
+* Based on the "Everything" fedora spin.
+* Anaconda is only used as an entry point. In kickstart terms: the entire installation happens in "%pre".
 * The installer is written in bash.
 
-### Default profile
+### LUKS profile
 
-The default "lvm\_luks" profile creates these partitions:
+The "lvm\_luks" storage profile creates these partitions:
 
 ```
 [core@box ~]$ lsblk -i -o NAME,TYPE,FSTYPE,LABEL,SIZE,MOUNTPOINTS
