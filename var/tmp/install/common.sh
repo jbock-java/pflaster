@@ -135,9 +135,13 @@ choose() {
 }
 
 get_profile() {
+  local result
   [[ $1 ]] || return
   [[ -f $installbase/profile.json ]] || return
-  jq -M -r "$1" $installbase/profile.json
+  result=$(jq -M -r "$1" $installbase/profile.json 2> /dev/null) || return 0
+  if [[ ${result:-null} != "null" ]]; then
+    echo "$result"
+  fi
 }
 
 remount() {
@@ -336,10 +340,8 @@ create_users() {
 
 set_root_pw() {
   local rootpw
-  rootpw=$(get_config .rootpw)
-  if [[ ${rootpw:-null} = "null" ]]; then
-    return 0
-  fi
+  rootpw=$(get_profile .rootpw)
+  [[ -z $rootpw ]] && return
   chmod 600 /etc/shadow
   sed -i -E "s@^root:\!unprovisioned:(.*)@root:$rootpw:\1@" /etc/shadow
   chmod 000 /etc/shadow
@@ -560,4 +562,27 @@ run_storage_tasks() {
   while read -r m; do
     run_storage_task "$m" || return
   done <<< "$tasks"
+}
+
+ask_new_key() {
+  local reply0 reply1
+  read -rsp "Choose $1: " reply0
+  echo
+  (( ${#reply0} >= 8 )) || {
+    echo "ERROR: minimum 8 characters"
+    return 1
+  }
+  [[ $reply0 = "${reply0// /}" ]] || {
+    echo "ERROR: spaces not allowed"
+    return 1
+  }
+  read -rsp "Confirm $1: " reply1
+  echo
+  if [[ $reply0 = "$reply1" ]]; then
+    eval "$2=$reply0"
+    return 0
+  else
+    echo "ERROR: no match"
+    return 1
+  fi
 }

@@ -170,13 +170,35 @@ postinstall_chrooted() {
   run_hook_chrooted postinstall
 }
 
+ask_new_rootpw() {
+  local rootpw
+  rootpw=$(get_config .rootpw)
+  if [[ -z $rootpw ]]; then
+    ask_new_key "rootpw" rootpw || return
+  fi
+  eval "$1=$rootpw"
+}
+
+configure_rootpw() {
+  local pw pwhash REPLY
+  if [[ $(get_profile .rootpw) ]]; then
+    read -rp "Keep rootpw? [Y/n] "
+    [[ -z $REPLY || $REPLY =~ [yY] ]] && return
+  fi
+  while :; do
+    ask_new_rootpw pw && break
+  done
+  pwhash=$(openssl passwd -6 -stdin <<< "$pw")
+  jqi ".rootpw = \"$pwhash\""
+}
+
 configure() {
   while :; do
     configure_disk
     choose storage
     choose software
-    echo "$installbase/profile.json:"
-    jq -M . $installbase/profile.json
+    configure_rootpw
+    jq -M '.rootpw = "********"' $installbase/profile.json
     read -rp "Is this correct? [Y/n] "
     if [[ -z $REPLY || $REPLY =~ [yY] ]]; then
       return 0

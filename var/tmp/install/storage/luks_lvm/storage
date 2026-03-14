@@ -25,24 +25,9 @@ print_parted_commands() {
 }
 
 ask_new_lukskey() {
-  local reply0 reply1
-  read -rsp "Choose lukskey: " reply0
-  echo
-  (( ${#reply0} >= 8 )) || {
-    echo "ERROR: minimum 8 characters"
-    return 1
-  }
-  [[ $reply0 = "${reply0// /}" ]] || {
-    echo "ERROR: spaces not allowed"
-    return 1
-  }
-  read -rsp "Confirm lukskey: " reply1
-  echo
-  [[ $reply0 = "$reply1" ]] || {
-    echo "ERROR: no match"
-    return 1
-  }
-  echo -n "$reply0" > $installbase/lukskey
+  local lukskey
+  ask_new_key "lukskey" lukskey || return
+  echo -n "$lukskey" > $installbase/lukskey
   chmod 600 $installbase/lukskey
 }
 

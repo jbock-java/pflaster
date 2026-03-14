@@ -1,5 +1,4 @@
 {
-  "rootpw": "$y$j9T$1nh8wsQE.22CRpUyxlbsq/$es.cIDVrTEG3HheOW5Fz.7hZQmQfS7XMMoLpdI715uD",
   "hostname": "box",
   "storage": {
     "luks_lvm": {
