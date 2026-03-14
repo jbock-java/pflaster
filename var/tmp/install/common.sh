@@ -401,23 +401,16 @@ set_target_firstboot() {
   chcon -t bin_t /usr/bin/tmux
 }
 
-manage_repo() {
-  (( $1 == 0 || $1 == 1 )) || return
-  [[ $2 ]] || return
-  local file=/etc/yum.repos.d/$(basename $2)
-  [[ -f $file ]] || return 0
-  sed -i -E \
-    -e "s/^enabled=.*/enabled=$1/" \
-    -e "s/^enabled_metadata=.*/enabled_metadata=$1/" \
-    $file
-}
-
 disable_repo() {
-  manage_repo 0 $1
+  local file=/etc/yum.repos.d/$(basename $1)
+  [[ -f $file ]] || return 0
+  sed -i -E "s/^enabled=.*$/enabled=0/" $file
 }
 
 enable_repo() {
-  manage_repo 1 $1
+  local file=/etc/yum.repos.d/$(basename $1)
+  [[ -f $file ]] || return 0
+  sed -i -E "0,/^enabled=/{s/^enabled=.*$/enabled=1/}" $file
 }
 
 loadkeys_config() {

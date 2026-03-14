@@ -50,7 +50,6 @@ install_more_software() {
     pipewire-utils
     pipewire-gstreamer
     pipewire-config-raop
-    pipewire-codec-aptx
   )
   echo "dnf install ${packs[@]}"
   dnf -qy --color=never install "${packs[@]}"

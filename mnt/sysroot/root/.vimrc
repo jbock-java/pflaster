@@ -4,7 +4,7 @@ set showcmd
 set autoindent expandtab tabstop=2 shiftwidth=2
 set noincsearch
 set notimeout
-colorscheme pablo
+colorscheme murphy
 
 "c-s to save the buffer
 nnoremap <c-s> :update<CR>
