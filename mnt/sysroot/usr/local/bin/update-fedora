@@ -1,0 +1,225 @@
+#!/bin/bash
+#
+#https://github.com/h908714124/my-scripts/blob/master/misc/update-fedora
+
+queue=""
+REPLY=""
+
+pop() {
+  if [[ $queue ]]; then
+    REPLY="${queue:0:1}"
+    queue="${queue:1}"
+  else
+    REPLY=""
+    return 0
+  fi
+}
+
+read_q() {
+  pop
+  if [[ $REPLY ]]; then
+    echo "$1$REPLY"
+    return 0
+  else
+    read -p "$1"
+    queue="$REPLY"
+    pop
+  fi
+}
+
+synopsis() {
+  tput bold
+  echo "USAGE"
+  tput sgr0
+  echo "       update-fedora [batch_commands]"
+  echo
+  tput bold
+  echo "EXAMPLES"
+  tput sgr0
+  echo "       update-fedora"
+  echo "              When there is no parameter, the program starts in interactive mode."
+  echo "       update-fedora uor"
+  echo "              Batch mode: perform commands 'u'(pdate), 'o'(ffline) and 'r'(eboot) in sequence."
+  echo "              Warning! If any updates are available,"
+  echo "              this will perform an offline update and reboot your computer."
+  echo "       update-fedora sq"
+  echo "              Batch mode: perform commands 's'(how) and 'q'(uit) in sequence."
+  echo "              Show available updates, then quit."
+  echo "       update-fedora cq"
+  echo "              Batch mode: perform commands 'c'(hangelog) and 'q'(uit) in sequence."
+  echo "              If updates are available, show the changelog, then quit."
+}
+
+release_type() {
+  sed -n -E 's/^RELEASE_TYPE=(\S+)/\1/p' /etc/os-release
+}
+
+os_release() {
+  sed -n -E 's/^VERSION_ID=(\S+)/\1/p' /etc/os-release
+}
+
+target_release() {
+  local current result
+  current=$(os_release)
+  if [[ $(release_type) != "stable" ]]; then
+    echo $current
+    return 0
+  fi
+  local metainfo=/usr/share/metainfo/org.fedoraproject.fedora.metainfo.xml
+  if [[ -f $metainfo ]]; then
+    result=$(xmllint --xpath "/component/releases//release[@type='stable']/@version" $metainfo | \
+      sed -n -E 's/.*[=]["]([0-9]+)["].*/\1/p' | \
+      sort -rn | \
+      head -1)
+  else
+    result=$(curl -s "https://fedoraproject.org/releases.json" | \
+      jq -r ".[]|select( .arch == \"$(uname -m)\") |.version" | \
+      sort -rn | \
+      head -1)
+  fi
+  if (( result >= current )); then
+    echo $result
+  else
+    echo $current
+  fi
+}
+
+is_update_prepared() {
+  sudo dnf offline status | grep -F -q "offline reboot"
+}
+
+check_updates_available() {
+  [[ $(dnf check-update --refresh 2> /dev/null) ]]
+}
+
+system_update() {
+  sudo dnf -y system-upgrade download --releasever=$1 && {
+    read_q "A system update is prepared. Would you like to reboot right now? [y/N] "
+    [[ $REPLY =~ [yY] ]] && sudo dnf -y offline reboot
+  }
+}
+
+update_running() {
+  sudo dnf -y update --refresh
+}
+
+submenu_update_prepared() {
+  echo "An offline-update is prepared."
+  while true; do
+    read_q "[r]eboot [c]lean [q]uit ? "
+    case $REPLY in
+      r)
+        sudo dnf -y offline reboot
+        return 0
+        ;;
+      c)
+        sudo dnf -y offline clean
+        return 0
+        ;;
+      q)
+        return 0
+        ;;
+    esac
+  done
+}
+
+update_offline() {
+  sudo dnf -y update --refresh --offline || return 1
+  submenu_update_prepared
+}
+
+default_action() {
+  local opt options
+  options=$(getopt -u -o "h" -l "help" -- "$@")
+  (( $? == 0 )) || {
+    synopsis
+    return 1
+  }
+  for opt in $options; do
+    case "$opt" in
+      -h | --help)
+        synopsis
+        return 0
+        ;;
+      --)
+        ;;
+      *)
+        [[ $queue ]] && {
+          synopsis
+          return 1
+        }
+        queue="$opt"
+        ;;
+    esac
+  done
+  if is_update_prepared; then
+    if [[ $queue = *:* ]]; then
+      queue="${queue#*:}"
+    else
+      queue=""
+    fi
+    submenu_update_prepared
+    return 0
+  elif [[ $queue = *:* ]]; then
+    queue=${queue%:*}
+  fi
+  check_updates_available && {
+    echo "An update is available."
+    while true; do
+      read_q "[s]how [u]pdate [c]hangelog [q]uit ? "
+      case $REPLY in
+        s)
+          dnf check-update
+          ;;
+        u)
+          while true; do
+            read_q "[o]ffline [r]unning [q]uit [b]ack ? "
+            case $REPLY in
+              o)
+                update_offline
+                return 0
+                ;;
+              q)
+                return 0
+                ;;
+              r)
+                update_running
+                return 0
+                ;;
+              b)
+                break
+                ;;
+              esac
+            done
+          ;;
+        c)
+          dnf changelog --upgrades
+          ;;
+        q)
+          return 0
+          ;;
+      esac
+    done
+  }
+  queue=""
+  echo "The system is up-to-date."
+  local current target
+  current=$(os_release)
+  target=$(target_release)
+  if (( current == target )); then
+    [[ $(release_type) = "stable" ]] && {
+      read_q "Would you like to upgrade to rawhide? [y/N] "
+      [[ $REPLY =~ [yY] ]] && system_update rawhide
+    }
+  elif (( current < target )); then
+    echo "A system update to fedora $(( current + 1 )) is available."
+    read_q "Would you like to download it now? [y/N] "
+    [[ $REPLY =~ [yY] ]] && system_update $(( current + 1 ))
+  fi
+  return 0
+}
+
+return 2> /dev/null || {
+  default_action "$@"
+  exit $?
+}

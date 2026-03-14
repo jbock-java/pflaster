@@ -137,7 +137,7 @@ choose() {
 get_profile() {
   [[ $1 ]] || return
   [[ -f $installbase/profile.json ]] || return
-  jq -r "$1" $installbase/profile.json
+  jq -M -r "$1" $installbase/profile.json
 }
 
 remount() {
@@ -211,7 +211,7 @@ configure_disk() {
 }
 
 get_disk() {
-  get_config .disk
+  get_profile .disk
 }
 
 dnf_install_rootfs() {

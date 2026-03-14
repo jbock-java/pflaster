@@ -30,11 +30,10 @@ install_more_groups() {
 install_more_software() {
   local packs=(
     git
+    meld
     mousepad
     ugrep
     ffmpeg
-    x264-libs
-    x265-libs
     gutenprint
     portaudio
     NetworkManager-wifi
@@ -42,18 +41,11 @@ install_more_software() {
     liberation-serif-fonts
     gdouros-symbola-fonts
     google-noto-emoji-fonts
-    mokutil
     highcontrast-icon-theme
     im-chooser
     libadwaita
-    libva-intel-media-driver
-    kwebkitpart
     SDL2_ttf
     breeze-icon-theme-fedora
-    gstreamer1-plugin-dav1d
-    gstreamer1-plugins-bad-freeworld
-    gstreamer1-plugins-ugly
-    gstreamer1-plugins-ugly-free
     cpuinfo
     pipewire-utils
     pipewire-gstreamer

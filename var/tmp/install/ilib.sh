@@ -175,7 +175,6 @@ configure() {
     configure_disk
     choose storage
     choose software
-    echo "Installation target: $(get_disk)"
     echo "$installbase/profile.json:"
     jq -M . $installbase/profile.json
     read -rp "Is this correct? [Y/n] "
