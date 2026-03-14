@@ -140,17 +140,28 @@ install_kernel() {
   dnf_install_rootfs kernel-$(uname -r)
 }
 
+pre_script() {
+  local storage script
+  storage=$(getarg pf.storage)
+  [[ $storage ]] || return 0
+  script=$installbase/storage/$storage/pre
+  [[ -f $script ]] || return 0
+  $script
+}
+
 storage_script() {
-  local storage=$(get_profile .storage)
+  local storage script
+  storage=$(get_profile .storage)
   [[ $storage ]] || return
-  local script=$installbase/storage/$storage/storage
+  script=$installbase/storage/$storage/storage
   [[ -f $script ]] || return
   $script
 }
 
 run_hook_chrooted() {
-  local storage=$(get_profile .storage)
-  local software=$(get_profile .software)
+  local storage software
+  storage=$(get_profile .storage)
+  software=$(get_profile .software)
   [[ $storage ]] || return
   [[ $software ]] || return
   run_chrooted $installbase/$1 || return
@@ -240,6 +251,7 @@ do_everything() {
 
   # Preparations
   echo "Type 'C-b c stop' to halt after installation, or 'C-b c stop --now' to halt earlier."
+  run pre_script || return
   run configure || return
   run storage_script || return
   run mount_rootfs || return

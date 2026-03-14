@@ -394,13 +394,17 @@ set_target_anyboot() {
 
 set_target_firstboot() {
   [[ -f /usr/share/systemux/tmux.conf ]] || return
-  local software=$(get_profile .software)
+  local software
+  software=$(get_profile .software)
   [[ $software ]] || return
   systemctl set-default firstboot.target
   set_permissive
   # sesearch -s init_t -t screen_exec_t -c file -A
   # sesearch -s init_t -t init_t -c file -A
-  chcon -t bin_t /usr/bin/tmux
+  if [[ -f /usr/bin/tmux ]]; then
+    # this seems necessary
+    chcon -t bin_t /usr/bin/tmux
+  fi
 }
 
 disable_repo() {
