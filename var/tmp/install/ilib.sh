@@ -122,11 +122,12 @@ install_packages() {
 }
 
 copy_common() {
-  mkdir -p $sysroot$installbase
-  mkdir -p $sysroot/usr/bin
+  local storage
+  storage=$(get_profile .storage)
+  mkdir -p $sysroot$installbase/storage/$storage
+  cp $installbase/storage/$storage/* $sysroot$installbase/storage/$storage
   cp $installbase/common.sh $sysroot$installbase || return
   cp $installbase/config.json $sysroot$installbase || return
-  cp $installbase/disk $sysroot$installbase || return
 }
 
 copy_profile() {

@@ -49,10 +49,10 @@ See this thread: <https://discussion.fedoraproject.org/t/how-to-install-fedora-w
 
 Run `make`. This should create `early.tgz` and `late.tgz`.
 
-Now that you have these files, start a server. Here's an easy way to do this:
+Now that you have these files, start a server. Here's an easy way to do both:
 
 ```
-./serve
+make && ./serve
 ```
 
 Write down the http address that is printed, and append "manual.cfg". For example: `http://192.168.178.22:3001/manual.cfg`

@@ -68,11 +68,11 @@ run_spawned() {
 }
 
 jqi() {
-  local tfn file=$installbase/profile.json
-  [[ -f $file ]] || { echo "{}" > $file ; }
-  tfn=$(mktemp) || return
-  jq "$@" $file > $tfn || return
-  mv $tfn $file
+  local tmpfile profile=$installbase/profile.json
+  [[ -f $profile ]] || { echo "{}" > $profile ; }
+  tmpfile=$(mktemp) || return
+  jq "$@" $profile > $tmpfile || return
+  mv $tmpfile $profile
 }
 
 choose() {
@@ -190,8 +190,7 @@ get_config() {
 }
 
 configure_disk() {
-  [[ -f $installbase/disk ]] && return
-  local path disks REPLY lsblk_printed=false
+  local path disks REPLY lsblk_printed
   disks=$(get_disks)
   disks=${disks% }
   while true; do
@@ -199,21 +198,20 @@ configure_disk() {
       echo "FATAL: no disks"
       return 1
     elif [[ ${disks// /} = "$disks" ]]; then
-      get_path $disks > $installbase/disk
+      jqi ".disk = \"$(get_path $disks)\""
       return 0
     else
-      $lsblk_printed || { lsblk ; lsblk_printed=true ; }
+      [[ $lsblk_printed ]] || { lsblk ; lsblk_printed=1 ; }
       read -r -p "Please choose disk for installation [${disks// /|}]: "
       path=$(get_path $REPLY) || continue
-      echo $path > $installbase/disk
+      jqi ".disk = \"$path\""
       return 0
     fi
   done
 }
 
 get_disk() {
-  [[ -f $installbase/disk ]] || return 1
-  cat $installbase/disk
+  get_config .disk
 }
 
 dnf_install_rootfs() {

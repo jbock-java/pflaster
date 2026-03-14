@@ -3,6 +3,9 @@
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
 disable_zram() {
+  local vgname label_swap
+  vgname=$(get_config .storage.plain_lvm.vgname) || return
+  label_swap=$(get_config .storage.plain_lvm.partition.swap) || return
   if [[ -e /dev/mapper/$vgname-$label_swap ]]; then
     mkdir -p /etc/systemd
     touch /etc/systemd/zram-generator.conf
