@@ -1,5 +1,4 @@
 {
-  "hostname": "box",
   "storage": {
     "luks_lvm": {
       "banner": "luks + lvm + ext4. TPM2 unlocking.",

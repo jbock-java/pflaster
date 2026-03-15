@@ -85,7 +85,7 @@ choose() {
     return
   elif [[ -f $installbase/profile.json ]] && jq -e "has(\"$what\")" $installbase/profile.json > /dev/null; then
     choice=$(jq -r ".$what" $installbase/profile.json)
-    read -rp "$what=$choice <- keep this choice? [Y/n] "
+    read -rp "$what $choice is configured. Keep it? [Y/n] "
     [[ -z $REPLY || $REPLY =~ [yY] ]] && return
   fi
   for choice in $(jq -r ".$what | keys[]" $installbase/config.json); do
@@ -424,17 +424,11 @@ loadkeys_config() {
   chmod u+s $(which loadkeys)
 }
 
-configure_hostname() {
+apply_hostname_config() {
   local hostname
-  hostname="$(get_config .hostname)"
-  if [[ $hostname ]]; then
-    hostnamectl hostname $hostname
-  elif [[ -f /etc/hostname ]]; then
-    hostnamectl hostname $(< /etc/hostname)
-  else
-    echo "ERROR: hostname not configured"
-    return 1
-  fi
+  hostname="$(get_profile .hostname)"
+  [[ $hostname ]] || return
+  hostnamectl hostname $hostname
 }
 
 jm() {

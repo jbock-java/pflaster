@@ -15,7 +15,6 @@ firstboot() {
       $file || rc=1
     fi
   done
-  run configure_hostname || return
   systemctl enable anyboot.service || return
   run set_target_anyboot || return
   if [[ -f /tmp/stop ]]; then
