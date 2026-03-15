@@ -1,0 +1,11 @@
+{
+  "rootpw": "fnalfsd41",
+  "user": {
+    "core": {
+      "system": false,
+      "admin": true,
+      "password": "********",
+      "sshkey": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCmvZwz5BggofSvRQpl9m="
+    }
+  }
+}

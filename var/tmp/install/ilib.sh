@@ -235,6 +235,11 @@ configure_user() {
     read -rp "User $users is configured. Keep it? [Y/n] "
     [[ -z $REPLY || $REPLY =~ [yY] ]] && return
   fi
+  read -rp "Create a user? [y/N] "
+  if [[ -z $REPLY || $REPLY =~ [nN] ]]; then
+    jqi "del(.user)"
+    return
+  fi
   while :; do
     read -rp "Choose a username: " username
     [[ $username ]] && break
