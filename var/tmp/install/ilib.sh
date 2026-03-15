@@ -189,8 +189,13 @@ configure_rootpw() {
     return
   fi
   if [[ $(get_profile .rootpw) ]]; then
-    read -rp "rootpw is configured. Keep it? [Y/n] "
+    read -rp "A root password is configured. Keep it? [Y/n] "
     [[ -z $REPLY || $REPLY =~ [yY] ]] && return
+  fi
+  read -rp "Set a root password? [y/N] "
+  if [[ -z $REPLY || $REPLY =~ [nN] ]]; then
+    jqi "del(.rootpw)"
+    return
   fi
   while :; do
     ask_new_key "rootpw" pw && break
@@ -231,7 +236,7 @@ configure_user() {
     [[ -z $REPLY || $REPLY =~ [yY] ]] && return
   fi
   while :; do
-    read -rp "Choose username: " username
+    read -rp "Choose a username: " username
     [[ $username ]] && break
   done
   while :; do
@@ -250,7 +255,7 @@ configure() {
     configure_rootpw
     configure_hostname
     configure_user
-    jq -M '.rootpw = "********"' $installbase/profile.json
+    jq -M -f $installbase/mask.jq $installbase/profile.json
     read -rp "Is this correct? [Y/n] "
     if [[ -z $REPLY || $REPLY =~ [yY] ]]; then
       return 0

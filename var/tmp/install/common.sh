@@ -341,7 +341,9 @@ create_users() {
 set_root_pw() {
   local rootpw
   rootpw=$(get_profile .rootpw)
-  [[ -z $rootpw ]] && return
+  if [[ -z $rootpw ]]; then
+    return 0
+  fi
   chmod 600 /etc/shadow
   sed -i -E "s@^root:\!unprovisioned:(.*)@root:$rootpw:\1@" /etc/shadow
   chmod 000 /etc/shadow
