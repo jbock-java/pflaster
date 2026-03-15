@@ -218,6 +218,30 @@ configure_hostname() {
   jqi ".hostname = \"$REPLY\""
 }
 
+configure_user() {
+  local users username pw pwhash REPLY
+  users=$(get_config '.user // {} | keys[]')
+  if [[ $users ]]; then
+    jqi ".user = $(get_config .user)"
+    return
+  fi
+  users=$(get_profile '.user // {} | keys[]')
+  if [[ $users ]]; then
+    read -rp "User $users is configured. Keep it? [Y/n] "
+    [[ -z $REPLY || $REPLY =~ [yY] ]] && return
+  fi
+  while :; do
+    read -rp "Choose username: " username
+    [[ $username ]] && break
+  done
+  while :; do
+    ask_new_key "password for $username" pw && break
+  done
+  pwhash=$(openssl passwd -6 -stdin <<< "$pw")
+  jqi ".user.$username.admin = true"
+  jqi ".user.$username.password = \"$pwhash\""
+}
+
 configure() {
   while :; do
     configure_disk
@@ -225,6 +249,7 @@ configure() {
     choose software
     configure_rootpw
     configure_hostname
+    configure_user
     jq -M '.rootpw = "********"' $installbase/profile.json
     read -rp "Is this correct? [Y/n] "
     if [[ -z $REPLY || $REPLY =~ [yY] ]]; then

@@ -296,7 +296,7 @@ get_only_child() {
 }
 
 get_users() {
-  jq -r '.user | keys[]' "$installbase/config.json"
+  jq -M -r '.user // {} | keys[]' "$installbase/profile.json"
 }
 
 create_user() {
@@ -307,11 +307,11 @@ create_user() {
   if [[ $user_exists ]]; then
     useradd_opts+=("-m")
   fi
-  if [[ $(get_config .user.$user.system) = "true" ]]; then
+  if [[ $(get_profile .user.$user.system) = "true" ]]; then
     useradd_opts+=("--system")
   fi
-  useradd -U "${useradd_opts[@]}" -p "$(get_config .user.$user.password)" "$user"
-  if [[ $(get_config .user.$user.admin) = "true" ]]; then
+  useradd -U "${useradd_opts[@]}" -p "$(get_profile .user.$user.password)" "$user"
+  if [[ $(get_profile .user.$user.admin) = "true" ]]; then
     usermod -a -G wheel "$user"
   fi
   if [[ $user_exists ]]; then
@@ -319,8 +319,8 @@ create_user() {
     return 0
   fi
   local sshkey
-  sshkey="$(get_config .user.$user.sshkey)"
-  if [[ ${sshkey:-null} != "null" ]]; then
+  sshkey="$(get_profile .user.$user.sshkey)"
+  if [[ $sshkey ]]; then
     mkdir -p /home/$user/.ssh
     chmod 700 /home/$user/.ssh
     echo "$sshkey" > /home/$user/.ssh/authorized_keys

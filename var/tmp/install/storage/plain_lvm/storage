@@ -23,19 +23,30 @@ print_parted_commands() {
   (( pos += pvrootsize ))
 }
 
-create_basic_partitions() {
-  local disk vgname pvroot pvrootsize vg
-  vgname=$(get_config .storage.plain_lvm.vgname) || return
-  vgchange -an $vgname || return
-  for vg in $(vgs --noheadings | sed -E 's/^\s*\b(\S+)\b.*/\1/'); do
-    if [[ $vg = "$vgname" ]]; then
-      vgremove -f $vgname || return
+clean_pv() {
+  local disk kname dev
+  disk=$(get_disk) || return
+  kname=$(lsblk -n --filter "PATH == \"$disk\"" -o KNAME)
+  vgname=$(get_config .storage.plain_lvm.vgname)
+  for dev in $(lsblk -n --filter "FSTYPE == \"LVM2_member\" && PKNAME == \"$kname\"" -o PATH); do
+    if pvs --devices $dev --reportformat json_std | jq -e ".report[].pv[]| select (.vg_name == \"$vgname\")" > /dev/null; then
+      vgchange --devices $dev -an || return
+      pvremove -y $dev || return
+      break
     fi
   done
-  pvrootsize=$(get_pvrootsize)
+}
+
+create_basic_partitions() {
+  local disk
   disk=$(get_disk) || return
   parted --script --align optimal $disk -- $(print_parted_commands) || return 
   sleep 5
+}
+
+create_vg() {
+  local vgname pvroot
+  vgname=$(get_config .storage.plain_lvm.vgname) || return
   pvroot=$(by_partlabel pvroot) || return
   pvcreate $pvroot || return
   vgcreate $vgname $pvroot || return
@@ -80,7 +91,9 @@ wipe() {
       sleep inf
     fi
   done
+  clean_pv || return
   create_basic_partitions || return
+  create_vg || return
   run_storage_tasks "$(create_partitions_tasks)"
 }
 
