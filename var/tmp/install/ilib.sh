@@ -143,7 +143,10 @@ install_kernel() {
 pre_script() {
   local storage script
   storage=$(getarg pf.storage)
-  [[ $storage ]] || return 0
+  [[ $storage ]] || {
+    echo "skipping pre: storage not preconfigured"
+    return 0
+  }
   script=$installbase/storage/$storage/pre
   [[ -f $script ]] || return 0
   $script
@@ -334,4 +337,8 @@ do_everything() {
     sleep inf
   fi
   reboot
+}
+
+return 2> /dev/null || {
+  do_everything
 }

@@ -71,7 +71,7 @@ jqi() {
   local tmpfile profile=$installbase/profile.json
   [[ -f $profile ]] || { echo "{}" > $profile ; }
   tmpfile=$(mktemp) || return
-  jq "$@" $profile > $tmpfile || return
+  jq -cM "$@" $profile > $tmpfile || return
   mv $tmpfile $profile
 }
 
@@ -300,17 +300,21 @@ get_users() {
 }
 
 create_user() {
-  local user_exists user=$1 useradd_opts=()
+  local user_exists sshkey pw user=$1 useradd_opts=()
   if [[ -e /home/$user ]]; then
     user_exists=1
   fi
   if [[ $user_exists ]]; then
-    useradd_opts+=("-m")
+    useradd_opts+=(-m)
   fi
   if [[ $(get_profile .user.$user.system) = "true" ]]; then
-    useradd_opts+=("--system")
+    useradd_opts+=(--system)
   fi
-  useradd -U "${useradd_opts[@]}" -p "$(get_profile .user.$user.password)" "$user"
+  pw=$(get_profile .user.$user.password)
+  if [[ $pw ]]; then
+    useradd_opts+=(-p "$pw")
+  fi
+  useradd -U "${useradd_opts[@]}" "$user"
   if [[ $(get_profile .user.$user.admin) = "true" ]]; then
     usermod -a -G wheel "$user"
   fi
@@ -318,16 +322,13 @@ create_user() {
     chown -R $user: /home/$user
     return 0
   fi
-  local sshkey
   sshkey="$(get_profile .user.$user.sshkey)"
+  mkdir -p /home/$user/.ssh
+  chmod 700 /home/$user/.ssh
   if [[ $sshkey ]]; then
-    mkdir -p /home/$user/.ssh
-    chmod 700 /home/$user/.ssh
     echo "$sshkey" > /home/$user/.ssh/authorized_keys
     chmod 600 /home/$user/.ssh/authorized_keys
   fi
-  mkdir -p /home/$user/.bashrc.d
-  echo "alias ll='ls -lAZ --color=auto'" > /home/$user/.bashrc.d/aliases.sh
   chown -R $user: /home/$user
 }
 
@@ -429,7 +430,9 @@ loadkeys_config() {
 apply_hostname_config() {
   local hostname
   hostname="$(get_profile .hostname)"
+  echo "configuring hostname: $hostname"
   [[ $hostname ]] || return
+  echo "$hostname" > /etc/hostname
   hostnamectl hostname $hostname
 }
 

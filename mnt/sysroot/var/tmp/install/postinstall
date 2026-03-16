@@ -11,5 +11,6 @@ do_postinstall() {
 }
 
 return 2> /dev/null || {
+  export NO_COLOR=1
   do_postinstall
 }
