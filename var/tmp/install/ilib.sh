@@ -255,8 +255,24 @@ configure_user() {
   jqi ".user.$username.password = \"$pwhash\""
 }
 
+configure_keyboard() {
+  local default keyboard result REPLY
+  default=$(get_config .keyboard)
+  default=${default:-us}
+  keyboard=$(get_profile .keyboard)
+  while :; do
+    read -rp "Choose keyboard (default=${keyboard:-$default}): "
+    [[ -z $REPLY ]] && break
+    loadkeys -q -p "$REPLY" 2> /dev/null && break
+  done
+  result=${REPLY:-${keyboard:-$default}}
+  jqi ".keyboard = \"$result\""
+  loadkeys "$result"
+}
+
 configure() {
   while :; do
+    configure_keyboard
     configure_disk
     choose storage
     choose software
