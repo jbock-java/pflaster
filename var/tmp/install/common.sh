@@ -295,61 +295,6 @@ get_only_child() {
   echo $children
 }
 
-get_users() {
-  jq -M -r '.user // {} | keys[]' "$installbase/profile.json"
-}
-
-create_user() {
-  local user_exists sshkey pw user=$1 useradd_opts=()
-  if [[ -e /home/$user ]]; then
-    user_exists=1
-  fi
-  if [[ $user_exists ]]; then
-    useradd_opts+=(-m)
-  fi
-  if [[ $(get_profile .user.$user.system) = "true" ]]; then
-    useradd_opts+=(--system)
-  fi
-  pw=$(get_profile .user.$user.password)
-  if [[ $pw ]]; then
-    useradd_opts+=(-p "$pw")
-  fi
-  useradd -U "${useradd_opts[@]}" "$user"
-  if [[ $(get_profile .user.$user.admin) = "true" ]]; then
-    usermod -a -G wheel "$user"
-  fi
-  if [[ $user_exists ]]; then
-    chown -R $user: /home/$user
-    return 0
-  fi
-  sshkey="$(get_profile .user.$user.sshkey)"
-  mkdir -p /home/$user/.ssh
-  chmod 700 /home/$user/.ssh
-  if [[ $sshkey ]]; then
-    echo "$sshkey" > /home/$user/.ssh/authorized_keys
-    chmod 600 /home/$user/.ssh/authorized_keys
-  fi
-  chown -R $user: /home/$user
-}
-
-create_users() {
-  local user users=$(get_users)
-  for user in $users; do
-    create_user $user
-  done
-}
-
-set_root_pw() {
-  local rootpw
-  rootpw=$(get_profile .rootpw)
-  if [[ -z $rootpw ]]; then
-    return 0
-  fi
-  chmod 600 /etc/shadow
-  sed -i -E "s@^root:\!unprovisioned:(.*)@root:$rootpw:\1@" /etc/shadow
-  chmod 000 /etc/shadow
-}
-
 trigger_autorelabel() {
   rpm --quiet -q selinux-policy || return 0
   touch /.autorelabel
@@ -358,11 +303,6 @@ trigger_autorelabel() {
 set_enforcing() {
   rpm --quiet -q selinux-policy || return 0
   sed -i -E 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
-}
-
-set_permissive() {
-  rpm --quiet -q selinux-policy || return 0
-  sed -i -E 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
 }
 
 set_nopasswd() {
@@ -395,21 +335,6 @@ set_target_anyboot() {
   systemctl set-default ${target:-multi-user}.target
 }
 
-set_target_firstboot() {
-  [[ -f /usr/share/systemux/tmux.conf ]] || return
-  local software
-  software=$(get_profile .software)
-  [[ $software ]] || return
-  systemctl set-default firstboot.target
-  set_permissive
-  # sesearch -s init_t -t screen_exec_t -c file -A
-  # sesearch -s init_t -t init_t -c file -A
-  if [[ -f /usr/bin/tmux ]]; then
-    # this seems necessary
-    chcon -t bin_t /usr/bin/tmux
-  fi
-}
-
 disable_repo() {
   local file=/etc/yum.repos.d/$(basename $1)
   [[ -f $file ]] || return 0
@@ -425,15 +350,6 @@ enable_repo() {
 loadkeys_config() {
   # https://unix.stackexchange.com/questions/85374/loadkeys-gives-permission-denied-for-normal-user
   chmod u+s $(which loadkeys)
-}
-
-apply_hostname_config() {
-  local hostname
-  hostname="$(get_profile .hostname)"
-  echo "configuring hostname: $hostname"
-  [[ $hostname ]] || return
-  echo "$hostname" > /etc/hostname
-  hostnamectl hostname $hostname
 }
 
 jm() {

@@ -12,11 +12,11 @@ enable_updates() {
 firstboot_script() {
   run set_timezone || return
   run set_rtc_utc || return
+  run set_enforcing || return
   run enable_updates || return
+  run trigger_autorelabel || return
 }
 
 return 2> /dev/null || {
   firstboot_script
 }
-
-:

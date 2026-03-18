@@ -93,5 +93,3 @@ firstboot_script() {
 return 2> /dev/null || {
   firstboot_script
 }
-
-:
