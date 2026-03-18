@@ -2,9 +2,42 @@
 
 [[ -v installbase ]] || source /var/tmp/install/common.sh
 
+configure_vconsole() {
+  local keyboard
+  keyboard=$(get_profile .keyboard)
+  keyboard=${keyboard:-us}
+  if [[ -f /etc/vconsole.conf ]]; then
+    if grep -q ^KEYMAP= /etc/vconsole.conf; then
+      sed -i -E "s/^KEYMAP=.*/KEYMAP=\"$keyboard\"/" /etc/vconsole.conf
+    else
+      echo "KEYMAP=\"$keyboard\"" > /etc/vconsole.conf
+    fi
+  else
+    echo "KEYMAP=\"$keyboard\"" > /etc/vconsole.conf
+  fi
+}
+
+configure_locale() {
+  local lang
+  lang=$(get_profile .lang)
+  lang=${lang:-en_US}
+  lang=${lang%.*}.UTF-8
+  if [[ -f /etc/locale.conf ]]; then
+    if grep -q ^LANG= /etc/locale.conf; then
+      sed -i -E "s/^LANG=.*/LANG=\"$lang\"/" /etc/locale.conf
+    else
+      echo "LANG=\"$lang\"" > /etc/locale.conf
+    fi
+  else
+    echo "LANG=\"$lang\"" > /etc/locale.conf
+  fi
+}
+
 do_postinstall() {
   run set_root_pw || return
   run create_users || return
+  run configure_vconsole || return
+  run configure_locale || return
   run configure_sdboot || return
   run apply_hostname_config || return
   run set_target_firstboot || return

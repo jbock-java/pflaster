@@ -31,6 +31,7 @@ clean_pv() {
   for dev in $(lsblk -n --filter "FSTYPE == \"LVM2_member\" && PKNAME == \"$kname\"" -o PATH); do
     if pvs --devices $dev --reportformat json_std | jq -e ".report[].pv[]| select (.vg_name == \"$vgname\")" > /dev/null; then
       vgchange --devices $dev -an || return
+      vgremove -y --devices $dev $vgname || return
       pvremove -y $dev || return
       break
     fi
@@ -83,12 +84,12 @@ create_partitions_tasks() {
 wipe() {
   local REPLY
   while :; do
-    read -rp "Erase all data on $(get_disk)? [y/N] "
+    echo "The installer will erase all data on $(get_disk)."
+    read -rp "Is this OK? [y/N] "
     if [[ $REPLY =~ [yY] ]]; then
       break
     elif [[ $REPLY =~ [nN] ]]; then
-      echo "Installation halted."
-      sleep inf
+      return 1
     fi
   done
   clean_pv || return

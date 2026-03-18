@@ -238,10 +238,12 @@ configure_user() {
     read -rp "User $users is configured. Keep it? [Y/n] "
     [[ -z $REPLY || $REPLY =~ [yY] ]] && return
   fi
-  read -rp "Create a user? [y/N] "
-  if [[ -z $REPLY || $REPLY =~ [nN] ]]; then
-    jqi "del(.user)"
-    return
+  if [[ $(get_profile .rootpw) ]]; then
+    read -rp "Create a user? [y/N] "
+    if [[ -z $REPLY || $REPLY =~ [nN] ]]; then
+      jqi "del(.user)"
+      return
+    fi
   fi
   while :; do
     read -rp "Choose a username: " username
@@ -270,9 +272,30 @@ configure_keyboard() {
   loadkeys "$result"
 }
 
+is_valid_locale() {
+  local arg
+  arg=${1%.*}
+  localectl list-locales | sed -n -E 's/^([^.]+)\..*/\1/p' | grep -q "^$arg$"
+}
+
+configure_locale() {
+  local default lang result REPLY
+  default=$(get_config .lang)
+  default=${default:-en_US}
+  lang=$(get_profile .lang)
+  while :; do
+    read -rp "Choose locale (default=${lang:-$default}): "
+    [[ -z $REPLY ]] && break
+    is_valid_locale "$REPLY" && break
+  done
+  result=${REPLY:-${lang:-$default}}
+  jqi ".lang = \"$result\""
+}
+
 configure() {
   while :; do
     configure_keyboard
+    configure_locale
     configure_disk
     choose storage
     choose software

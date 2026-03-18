@@ -49,6 +49,7 @@
     "vim-default-editor",
     "vim-ctrlp",
     "jq",
+    "glibc-all-langpacks",
     "tmux"
   ]
 }

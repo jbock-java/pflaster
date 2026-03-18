@@ -164,12 +164,12 @@ preserve_home_tasks() {
 wipe() {
   local REPLY
   while :; do
-    read -rp "OK to erase all data on $(get_disk)? [y/N] "
+    echo "The installer will erase all data on $(get_disk)."
+    read -rp "Is this OK? [y/N] "
     if [[ $REPLY =~ [yY] ]]; then
       break
     elif [[ $REPLY =~ [nN] ]]; then
-      echo "Installation halted."
-      sleep inf
+      return 1
     fi
   done
   run create_basic_partitions || return
