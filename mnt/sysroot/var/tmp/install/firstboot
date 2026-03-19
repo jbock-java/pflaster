@@ -4,6 +4,7 @@
 
 firstboot() {
   local segment file storage software rc=0
+  run configure_keyboard || return
   storage=$(get_profile .storage)
   software=$(get_profile .software)
   [[ $storage ]] || return

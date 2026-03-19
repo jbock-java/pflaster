@@ -505,3 +505,23 @@ ask_new_key() {
     return 1
   fi
 }
+
+configure_keyboard() {
+  local keyboard
+  keyboard=$(get_profile .keyboard)
+  keyboard=${keyboard:-us}
+  if [[ -f /etc/vconsole.conf ]]; then
+    if grep -q ^KEYMAP= /etc/vconsole.conf; then
+      sed -i -E "s/^KEYMAP=.*/KEYMAP=\"$keyboard\"/" /etc/vconsole.conf
+    else
+      echo "KEYMAP=\"$keyboard\"" > /etc/vconsole.conf
+    fi
+  else
+    echo "KEYMAP=\"$keyboard\"" > /etc/vconsole.conf
+  fi
+  keyboard=${keyboard%.*}
+  keyboard=${keyboard%_*}
+  if localectl list-x11-keymap-layouts | grep -q "^$keyboard$"; then
+    localectl set-x11-keymap "$keyboard"
+  fi
+}

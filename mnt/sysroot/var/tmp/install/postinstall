@@ -57,21 +57,6 @@ create_users() {
   done
 }
 
-configure_vconsole() {
-  local keyboard
-  keyboard=$(get_profile .keyboard)
-  keyboard=${keyboard:-us}
-  if [[ -f /etc/vconsole.conf ]]; then
-    if grep -q ^KEYMAP= /etc/vconsole.conf; then
-      sed -i -E "s/^KEYMAP=.*/KEYMAP=\"$keyboard\"/" /etc/vconsole.conf
-    else
-      echo "KEYMAP=\"$keyboard\"" > /etc/vconsole.conf
-    fi
-  else
-    echo "KEYMAP=\"$keyboard\"" > /etc/vconsole.conf
-  fi
-}
-
 configure_locale() {
   local lang
   lang=$(get_profile .lang)
@@ -86,6 +71,7 @@ configure_locale() {
   else
     echo "LANG=\"$lang\"" > /etc/locale.conf
   fi
+  localectl set-locale $lang
 }
 
 apply_hostname_config() {
@@ -120,7 +106,7 @@ set_target_firstboot() {
 do_postinstall() {
   run set_root_pw || return
   run create_users || return
-  run configure_vconsole || return
+  run configure_keyboard || return
   run configure_locale || return
   run configure_sdboot || return
   run apply_hostname_config || return

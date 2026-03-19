@@ -103,7 +103,6 @@ assuming your http server runs on `192.168.178.22`.
 
 ### TODO
 
-* more [config options](https://github.com/jbock-java/pflaster/blob/main/tmp/install/config.json)
-* ask for profile if not configured
+* timzone config
 * add "btrfs" profile
 * add "bcachefs" profile
