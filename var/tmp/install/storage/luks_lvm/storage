@@ -179,7 +179,7 @@ wipe() {
 open_luks() {
   local pvroot pvname vgname
   pvname=$(get_config .storage.luks_lvm.pvname) || return
-  pvroot=$(by_partlabel $pvname)
+  pvroot=$(blkid --label $pvname) || return
   vgname=$(get_config .storage.luks_lvm.vgname) || return
   [[ $pvroot ]] || return
   cryptsetup luksOpen -q --disable-external-tokens --key-file $installbase/lukskey $pvroot $vgname || return
