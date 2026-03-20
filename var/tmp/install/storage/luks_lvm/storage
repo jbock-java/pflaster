@@ -196,7 +196,7 @@ prepare_partitions() {
   fi
   while :; do
     if ask_existing_lukskey; then
-      run open_luks
+      run open_luks || return
       run_storage_tasks "$(preserve_home_tasks)"
       return
     elif is_empty_file $installbase/lukskey; then
