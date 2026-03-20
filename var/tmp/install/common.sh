@@ -318,8 +318,9 @@ configure_sdboot() {
 }
 
 set_timezone() {
-  # currently hardcoded, make this a config
-  timedatectl set-timezone Europe/Berlin
+  local timezone
+  timezone=$(get_profile .timezone)
+  timedatectl set-timezone ${timezone:-UTC}
 }
 
 set_rtc_utc() {

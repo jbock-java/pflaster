@@ -103,6 +103,5 @@ assuming your http server runs on `192.168.178.22`.
 
 ### TODO
 
-* timzone config
 * add "btrfs" profile
 * add "bcachefs" profile

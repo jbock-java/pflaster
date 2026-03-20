@@ -279,23 +279,93 @@ is_valid_locale() {
 }
 
 configure_locale() {
-  local default lang result REPLY
+  local default lang result reply
   default=$(get_config .lang)
-  default=${default:-en_US}
+  default=${default:-en_us}
   lang=$(get_profile .lang)
   while :; do
-    read -rp "Choose locale (default=${lang:-$default}): "
-    [[ -z $REPLY ]] && break
-    is_valid_locale "$REPLY" && break
+    read -rp "choose locale (default=${lang:-$default}): "
+    [[ -z $reply ]] && break
+    is_valid_locale "$reply" && break
   done
-  result=${REPLY:-${lang:-$default}}
+  result=${reply:-${lang:-$default}}
   jqi ".lang = \"$result\""
+}
+
+tz_tree() {
+  local tz len=${#1}
+  if (( len == 0 )); then
+    timedatectl list-timezones | sed -E "s/^(.).*/\\1/" | tr '[A-Z]' '[a-z]' | sort -u | tr -d '\n'
+    return 1
+  else
+    tz=$(timedatectl list-timezones | grep -i "^$1")
+    if [[ $tz = *$'\n'* ]]; then
+      echo "${tz,,}" | sed -E "s/^.{$len}(.).*/\\1/" | sort -u | tr -d '\n'
+      return 1
+    elif [[ $tz ]]; then
+      echo "${tz,,}"
+      return 0
+    else
+      return 1
+    fi
+  fi
+}
+
+tz_user_read() {
+  local result mychar buf buftest
+  rm -f /tmp/tztree.txt
+  tz_tree
+  while :; do
+    read -s -N 1 mychar
+    mychar=${mychar,,}
+    if [[ $mychar = $'\177' ]]; then
+      buf=${buf:0:$(( ${#buf} - 1 ))}
+      result=$(tz_tree "$buf")
+      if [[ $buf ]]; then
+        printf "\r\033[K$buf $result"
+      else
+        printf "\r\033[K$result"
+      fi
+    elif [[ $mychar = $'\12' ]]; then
+      if tz_tree "$buf" > /dev/null; then
+        result=$(timedatectl list-timezones | grep -i "^$buf")
+        echo $result > /tmp/tztree.txt
+        printf "\r\033[K$result\n"
+        break
+      fi
+    elif [[ $mychar =~ [a-z0-9/_+-] ]]; then
+      buftest=$buf${mychar}
+      result=$(tz_tree "$buftest")
+      if [[ $result ]]; then
+        buf=$buftest
+        printf "\r\033[K$buf $result"
+      fi
+    fi
+  done
+}
+
+configure_timezone() {
+  local timezone
+  timezone=$(get_config .timezone)
+  if [[ $timezone ]]; then
+    jqi ".timezone = \"$timezone\""
+    return
+  fi
+  timezone=$(get_profile .timezone)
+  if [[ $timezone ]]; then
+    read -rp "Timezone $timezone is configured. Keep it? [Y/n] "
+    [[ -z $REPLY || $REPLY =~ [yY] ]] && return
+  fi
+  tz_user_read || return
+  [[ -f /tmp/tztree.txt ]] || return
+  jqi ".timezone = \"$(< /tmp/tztree.txt)\""
 }
 
 configure() {
   while :; do
     configure_keyboard
     configure_locale
+    configure_timezone
     configure_disk
     choose storage
     choose software
