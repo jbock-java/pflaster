@@ -295,7 +295,6 @@ configure_locale() {
 tz_tree() {
   local tz len=${#1}
   if (( len == 0 )); then
-    timedatectl list-timezones | sed -E "s/^(.).*/\\1/" | tr '[A-Z]' '[a-z]' | sort -u | tr -d '\n'
     return 1
   else
     tz=$(timedatectl list-timezones | grep -i "^$1")
@@ -319,12 +318,15 @@ tz_user_read() {
     read -s -N 1 mychar
     mychar=${mychar,,}
     if [[ $mychar = $'\177' ]]; then
-      buf=${buf:0:$(( ${#buf} - 1 ))}
-      result=$(tz_tree "$buf")
       if [[ $buf ]]; then
-        printf "\r\033[K$buf $result"
+        buf=${buf:0:$(( ${#buf} - 1 ))}
+      fi
+      if result=$(tz_tree "$buf"); then
+        printf "\r\033[K$buf -> $result"
+      elif [[ $buf ]]; then
+        printf "\r\033[K$buf [$result]"
       else
-        printf "\r\033[K$result"
+        printf "\r\033[K"
       fi
     elif [[ $mychar = $'\12' ]]; then
       if tz_tree "$buf" > /dev/null; then
@@ -334,11 +336,11 @@ tz_user_read() {
         break
       fi
     elif [[ $mychar =~ [a-z0-9/_+-] ]]; then
-      buftest=$buf${mychar}
-      result=$(tz_tree "$buftest")
-      if [[ $result ]]; then
-        buf=$buftest
-        printf "\r\033[K$buf $result"
+      buf=$buf${mychar}
+      if result=$(tz_tree "$buf"); then
+        printf "\r\033[K$buf -> $result"
+      else
+        printf "\r\033[K$buf [$result]"
       fi
     fi
   done
@@ -356,6 +358,8 @@ configure_timezone() {
     read -rp "Timezone $timezone is configured. Keep it? [Y/n] "
     [[ -z $REPLY || $REPLY =~ [yY] ]] && return
   fi
+  echo "Starting timezone selection. Confirm with Return when an arrow appears."
+  echo "Try \"utc\", \"country/city\" or \"continent/capital\"."
   tz_user_read || return
   [[ -f /tmp/tztree.txt ]] || return
   jqi ".timezone = \"$(< /tmp/tztree.txt)\""
