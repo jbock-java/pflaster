@@ -315,7 +315,7 @@ tz_user_read() {
   rm -f /tmp/tztree.txt
   tz_tree
   while :; do
-    read -s -N 1 mychar
+    read -s -N1 mychar
     mychar=${mychar,,}
     if [[ $mychar = $'\177' ]]; then
       if [[ $buf ]]; then
@@ -328,6 +328,10 @@ tz_user_read() {
       else
         printf "\r\033[K"
       fi
+    elif [[ $mychar = $'\33' ]]; then
+      echo UTC > /tmp/tztree.txt
+      printf "\r\033[KUTC\n"
+      break
     elif [[ $mychar = $'\12' ]]; then
       if tz_tree "$buf" > /dev/null; then
         result=$(timedatectl list-timezones | grep -i "^$buf")
@@ -336,12 +340,18 @@ tz_user_read() {
         break
       fi
     elif [[ $mychar =~ [a-z0-9/_+-] ]]; then
-      buf=$buf${mychar}
-      if result=$(tz_tree "$buf"); then
-        printf "\r\033[K$buf -> $result"
-      else
-        printf "\r\033[K$buf [$result]"
-      fi
+      buf=$buf$mychar
+      while :; do
+        if result=$(tz_tree "$buf"); then
+          printf "\r\033[K$buf -> $result"
+          break
+        elif (( ${#result} == 1 )); then
+          buf=$buf$result
+        else
+          printf "\r\033[K$buf [$result]"
+          break
+        fi
+      done
     fi
   done
 }
@@ -359,7 +369,7 @@ configure_timezone() {
     [[ -z $REPLY || $REPLY =~ [yY] ]] && return
   fi
   echo "Starting timezone selection. Confirm with Return when an arrow appears."
-  echo "Try \"utc\", \"country/city\" or \"continent/capital\"."
+  echo "Try \"continent/capital\" or \"country/region\"."
   tz_user_read || return
   [[ -f /tmp/tztree.txt ]] || return
   jqi ".timezone = \"$(< /tmp/tztree.txt)\""
