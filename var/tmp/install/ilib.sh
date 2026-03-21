@@ -279,7 +279,7 @@ kb_user_read() {
         buf=${buf:0:$(( ${#buf} - 1 ))}
       fi
       if result=$(kb_tree "$buf"); then
-        printf "\r\033[K$buf -> $result"
+        printf "\r\033[K$buf -> [$result]"
       elif [[ $buf ]]; then
         printf "\r\033[K$buf [$result]"
       else
@@ -295,7 +295,7 @@ kb_user_read() {
         printf "\r\033[K$buf\n"
         break
       fi
-    elif [[ $mychar =~ [a-z0-9/_+-] ]]; then
+    elif [[ $mychar =~ [a-z0-9_-] ]]; then
       buf=$buf$mychar
       while :; do
         if result=$(kb_tree "$buf"); then
@@ -317,8 +317,8 @@ configure_keyboard() {
   default=$(get_config .keyboard)
   keyboard=$(get_profile .keyboard)
   if [[ -n ${keyboard:-$default} ]]; then
-    read -rp "Keyboard \"${keyboard:-$default}\" is configured. Keep it? [y/n] "
-    if [[ -z $reply || $reply =~ [yy] ]]; then
+    read -rp "Keyboard \"${keyboard:-$default}\" is configured. Keep it? [Y/n] "
+    if [[ -z $REPLY || $REPLY =~ [Yy] ]]; then
       jqi ".keyboard = \"${keyboard:-$default}\""
       return
     fi
@@ -327,28 +327,85 @@ configure_keyboard() {
   echo "Try \"de\", \"us\" or \"de-us\"."
   kb_user_read || return
   [[ -f /tmp/kbtree.txt ]] || return
-  jqi ".keyboard = \"$(< /tmp/tztree.txt)\""
-  loadkeys "$(< /tmp/tztree.txt)"
+  jqi ".keyboard = \"$(< /tmp/kbtree.txt)\""
+  read -rp "Keyboard \"$(< /tmp/kbtree.txt)\" will be installed. Also use this keyboard now? [Y/n] "
+  if [[ -z $REPLY || $REPLY =~ [Yy] ]]; then
+    loadkeys "$(< /tmp/kbtree.txt)"
+  fi
 }
 
-is_valid_locale() {
-  local arg
-  arg=${1%.*}
-  localectl list-locales | sed -n -E 's/^([^.]+)\..*/\1/p' | grep -q "^$arg$"
+locale_tree() {
+  local loc len=${#1}
+  if (( len == 0 )); then
+    return 1
+  else
+    loc=$(localectl list-locales | tr '[:upper:]' '[:lower:]' | grep "^$1")
+    sed -n -E "s/^.{$len}(.).*/\\1/p" <<< "$loc" | sort -u | tr -d '\n'
+    grep -q ^$1$ <<< "$loc"
+  fi
+}
+
+locale_user_read() {
+  local result mychar buf buftest
+  rm -f /tmp/localetree.txt
+  while :; do
+    read -s -N1 mychar
+    mychar=${mychar,,}
+    if [[ $mychar = $'\177' ]]; then
+      if [[ $buf ]]; then
+        buf=${buf:0:$(( ${#buf} - 1 ))}
+      fi
+      if result=$(locale_tree "$buf"); then
+        printf "\r\033[K$buf -> [$result]"
+      elif [[ $buf ]]; then
+        printf "\r\033[K$buf [$result]"
+      else
+        printf "\r\033[K"
+      fi
+    elif [[ $mychar = $'\33' ]]; then
+      echo C.UTF-8 > /tmp/localetree.txt
+      printf "\r\033[KC.UTF-8\n"
+      break
+    elif [[ $mychar = $'\12' ]]; then
+      if locale_tree "$buf" > /dev/null; then
+        result=$(localectl list-locales | grep -i "^$buf$")
+        echo $result > /tmp/localetree.txt
+        printf "\r\033[K$result\n"
+        break
+      fi
+    elif [[ $mychar =~ [a-z0-9._@+-] ]]; then
+      buf=$buf$mychar
+      while :; do
+        if result=$(locale_tree "$buf"); then
+          printf "\r\033[K$buf -> [$result]"
+          break
+        elif (( ${#result} == 1 )); then
+          buf=$buf$result
+        else
+          printf "\r\033[K$buf [$result]"
+          break
+        fi
+      done
+    fi
+  done
 }
 
 configure_locale() {
-  local default lang result reply
+  local default loc
   default=$(get_config .lang)
-  default=${default:-en_us}
-  lang=$(get_profile .lang)
-  while :; do
-    read -rp "choose locale (default=${lang:-$default}): "
-    [[ -z $reply ]] && break
-    is_valid_locale "$reply" && break
-  done
-  result=${reply:-${lang:-$default}}
-  jqi ".lang = \"$result\""
+  loc=$(get_profile .lang)
+  if [[ -n ${loc:-$default} ]]; then
+    read -rp "Locale ${loc:-$default} is configured. Keep it? [Y/n] "
+    if [[ -z $REPLY || $REPLY =~ [Yy] ]]; then
+      jqi ".lang = \"${loc:-$default}\""
+      return
+    fi
+  fi
+  echo "Starting locale selection. You can accept with Return when an arrow appears."
+  echo "Try \"de_de\" or \"en_us\"."
+  locale_user_read || return
+  [[ -f /tmp/localetree.txt ]] || return
+  jqi ".lang = \"$(< /tmp/localetree.txt)\""
 }
 
 tz_tree() {
@@ -373,7 +430,7 @@ tz_user_read() {
         buf=${buf:0:$(( ${#buf} - 1 ))}
       fi
       if result=$(tz_tree "$buf"); then
-        printf "\r\033[K$buf -> $result"
+        printf "\r\033[K$buf -> [$result]"
       elif [[ $buf ]]; then
         printf "\r\033[K$buf [$result]"
       else
@@ -412,8 +469,8 @@ configure_timezone() {
   default=$(get_config .timezone)
   timezone=$(get_profile .timezone)
   if [[ -n ${timezone:-$default} ]]; then
-    read -rp "Timezone ${timezone:-$default} is configured. Keep it? [y/n] "
-    if [[ -z $reply || $reply =~ [yy] ]]; then
+    read -rp "Timezone ${timezone:-$default} is configured. Keep it? [Y/n] "
+    if [[ -z $REPLY || $REPLY =~ [Yy] ]]; then
       jqi ".timezone = \"${timezone:-$default}\""
       return
     fi
