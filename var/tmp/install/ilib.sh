@@ -257,19 +257,78 @@ configure_user() {
   jqi ".user.$username.password = \"$pwhash\""
 }
 
+kb_tree() {
+  local kb len=${#1}
+  if (( len == 0 )); then
+    return 1
+  else
+    kb=$(ls -1 /usr/lib/kbd/keymaps/xkb | sed 's/\.map\.gz$//' | grep "^$1")
+    sed -n -E "s/^.{$len}(.).*/\\1/p" <<< "$kb" | sort -u | tr -d '\n'
+    grep -q ^$1$ <<< "$kb"
+  fi
+}
+
+kb_user_read() {
+  local result mychar buf buftest
+  rm -f /tmp/kbtree.txt
+  while :; do
+    read -s -N1 mychar
+    mychar=${mychar,,}
+    if [[ $mychar = $'\177' ]]; then
+      if [[ $buf ]]; then
+        buf=${buf:0:$(( ${#buf} - 1 ))}
+      fi
+      if result=$(kb_tree "$buf"); then
+        printf "\r\033[K$buf -> $result"
+      elif [[ $buf ]]; then
+        printf "\r\033[K$buf [$result]"
+      else
+        printf "\r\033[K"
+      fi
+    elif [[ $mychar = $'\33' ]]; then
+      echo us > /tmp/kbtree.txt
+      printf "\r\033[Kus\n"
+      break
+    elif [[ $mychar = $'\12' ]]; then
+      if kb_tree "$buf" > /dev/null; then
+        echo $buf > /tmp/kbtree.txt
+        printf "\r\033[K$buf\n"
+        break
+      fi
+    elif [[ $mychar =~ [a-z0-9/_+-] ]]; then
+      buf=$buf$mychar
+      while :; do
+        if result=$(kb_tree "$buf"); then
+          printf "\r\033[K$buf -> [$result]"
+          break
+        elif (( ${#result} == 1 )); then
+          buf=$buf$result
+        else
+          printf "\r\033[K$buf [$result]"
+          break
+        fi
+      done
+    fi
+  done
+}
+
 configure_keyboard() {
   local default keyboard result REPLY
   default=$(get_config .keyboard)
-  default=${default:-us}
   keyboard=$(get_profile .keyboard)
-  while :; do
-    read -rp "Choose keyboard (default=${keyboard:-$default}): "
-    [[ -z $REPLY ]] && break
-    loadkeys -q -p "$REPLY" 2> /dev/null && break
-  done
-  result=${REPLY:-${keyboard:-$default}}
-  jqi ".keyboard = \"$result\""
-  loadkeys "$result"
+  if [[ -n ${keyboard:-$default} ]]; then
+    read -rp "Keyboard \"${keyboard:-$default}\" is configured. Keep it? [y/n] "
+    if [[ -z $reply || $reply =~ [yy] ]]; then
+      jqi ".keyboard = \"${keyboard:-$default}\""
+      return
+    fi
+  fi
+  echo "Starting keyboard selection. You can accept with Return when an arrow appears."
+  echo "Try \"de\", \"us\" or \"de-us\"."
+  kb_user_read || return
+  [[ -f /tmp/kbtree.txt ]] || return
+  jqi ".keyboard = \"$(< /tmp/tztree.txt)\""
+  loadkeys "$(< /tmp/tztree.txt)"
 }
 
 is_valid_locale() {
@@ -298,22 +357,14 @@ tz_tree() {
     return 1
   else
     tz=$(timedatectl list-timezones | grep -i "^$1")
-    if [[ $tz = *$'\n'* ]]; then
-      echo "${tz,,}" | sed -E "s/^.{$len}(.).*/\\1/" | sort -u | tr -d '\n'
-      return 1
-    elif [[ $tz ]]; then
-      echo "${tz,,}"
-      return 0
-    else
-      return 1
-    fi
+    sed -n -E "s/^.{$len}(.).*/\\1/p" <<< "${tz,,}" | sort -u | tr -d '\n'
+    grep -q ^$1$ <<< "${tz,,}"
   fi
 }
 
 tz_user_read() {
   local result mychar buf buftest
   rm -f /tmp/tztree.txt
-  tz_tree
   while :; do
     read -s -N1 mychar
     mychar=${mychar,,}
@@ -334,7 +385,7 @@ tz_user_read() {
       break
     elif [[ $mychar = $'\12' ]]; then
       if tz_tree "$buf" > /dev/null; then
-        result=$(timedatectl list-timezones | grep -i "^$buf")
+        result=$(timedatectl list-timezones | grep -i "^$buf$")
         echo $result > /tmp/tztree.txt
         printf "\r\033[K$result\n"
         break
@@ -343,7 +394,7 @@ tz_user_read() {
       buf=$buf$mychar
       while :; do
         if result=$(tz_tree "$buf"); then
-          printf "\r\033[K$buf -> $result"
+          printf "\r\033[K$buf -> [$result]"
           break
         elif (( ${#result} == 1 )); then
           buf=$buf$result
@@ -357,19 +408,18 @@ tz_user_read() {
 }
 
 configure_timezone() {
-  local timezone
-  timezone=$(get_config .timezone)
-  if [[ $timezone ]]; then
-    jqi ".timezone = \"$timezone\""
-    return
-  fi
+  local default timezone
+  default=$(get_config .timezone)
   timezone=$(get_profile .timezone)
-  if [[ $timezone ]]; then
-    read -rp "Timezone $timezone is configured. Keep it? [Y/n] "
-    [[ -z $REPLY || $REPLY =~ [yY] ]] && return
+  if [[ -n ${timezone:-$default} ]]; then
+    read -rp "Timezone ${timezone:-$default} is configured. Keep it? [y/n] "
+    if [[ -z $reply || $reply =~ [yy] ]]; then
+      jqi ".timezone = \"${timezone:-$default}\""
+      return
+    fi
   fi
-  echo "Starting timezone selection. Confirm with Return when an arrow appears."
-  echo "Try \"continent/capital\" or \"country/region\"."
+  echo "Starting timezone selection. You can accept with Return when an arrow appears."
+  echo "Try \"canada/eastern\" or \"europe/berlin\"."
   tz_user_read || return
   [[ -f /tmp/tztree.txt ]] || return
   jqi ".timezone = \"$(< /tmp/tztree.txt)\""
