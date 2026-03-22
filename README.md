@@ -103,5 +103,5 @@ assuming your http server runs on `192.168.178.22`.
 
 ### TODO
 
-* add "btrfs" profile
-* add "bcachefs" profile
+* add "btrfs" storage module
+* add "bcachefs" storage module
