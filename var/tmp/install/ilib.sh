@@ -188,6 +188,7 @@ configure_rootpw() {
   local pw pwhash REPLY
   pwhash=$(get_config .rootpw)
   if [[ $pwhash ]]; then
+    echo "rootpw specified via config"
     jqi ".rootpw = \"$pwhash\""
     return
   fi
@@ -230,6 +231,7 @@ configure_user() {
   local users username pw pwhash REPLY
   users=$(get_config '.user // {} | keys[]')
   if [[ $users ]]; then
+    echo "users specified via config"
     jqi ".user = $(get_config .user)"
     return
   fi
@@ -312,14 +314,22 @@ kb_user_read() {
   done
 }
 
+also_use_keyboard() {
+  read -rp "Keyboard \"$(get_profile .keyboard)\" will be installed. Also use this keyboard now? [Y/n] "
+  if [[ -z $REPLY || $REPLY =~ [Yy] ]]; then
+    loadkeys "$(get_profile .keyboard)"
+  fi
+}
+
 configure_keyboard() {
   local default keyboard result REPLY
   default=$(get_config .keyboard)
   keyboard=$(get_profile .keyboard)
-  if [[ -n ${keyboard:-$default} ]]; then
+  if [[ ${keyboard:-$default} ]]; then
     read -rp "Keyboard \"${keyboard:-$default}\" is configured. Keep it? [Y/n] "
     if [[ -z $REPLY || $REPLY =~ [Yy] ]]; then
       jqi ".keyboard = \"${keyboard:-$default}\""
+      also_use_keyboard
       return
     fi
   fi
@@ -328,10 +338,7 @@ configure_keyboard() {
   kb_user_read || return
   [[ -f /tmp/kbtree.txt ]] || return
   jqi ".keyboard = \"$(< /tmp/kbtree.txt)\""
-  read -rp "Keyboard \"$(< /tmp/kbtree.txt)\" will be installed. Also use this keyboard now? [Y/n] "
-  if [[ -z $REPLY || $REPLY =~ [Yy] ]]; then
-    loadkeys "$(< /tmp/kbtree.txt)"
-  fi
+  also_use_keyboard
 }
 
 locale_tree() {
@@ -394,7 +401,7 @@ configure_locale() {
   local default loc
   default=$(get_config .lang)
   loc=$(get_profile .lang)
-  if [[ -n ${loc:-$default} ]]; then
+  if [[ ${loc:-$default} ]]; then
     read -rp "Locale ${loc:-$default} is configured. Keep it? [Y/n] "
     if [[ -z $REPLY || $REPLY =~ [Yy] ]]; then
       jqi ".lang = \"${loc:-$default}\""
@@ -468,7 +475,7 @@ configure_timezone() {
   local default timezone
   default=$(get_config .timezone)
   timezone=$(get_profile .timezone)
-  if [[ -n ${timezone:-$default} ]]; then
+  if [[ ${timezone:-$default} ]]; then
     read -rp "Timezone ${timezone:-$default} is configured. Keep it? [Y/n] "
     if [[ -z $REPLY || $REPLY =~ [Yy] ]]; then
       jqi ".timezone = \"${timezone:-$default}\""

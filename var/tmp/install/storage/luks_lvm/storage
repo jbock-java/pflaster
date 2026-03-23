@@ -60,7 +60,7 @@ create_partitions_tasks() {
   label_root=$(get_config .storage.luks_lvm.partition.root) || return
   label_efi=$(get_config .storage.luks_lvm.partition.efi) || return
   if [[ $label_opt ]] && (( pvrootsize > 131072 )); then
-    (( optsize = 32768 ))
+    (( optsize = 8192 ))
   else
     (( optsize = 0 ))
   fi
@@ -111,7 +111,7 @@ sensible_sizes() {
     optsize=$(lvs $vgname --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_opt\").lv_size" | sed -E 's/^(.*)B$/\1/')
     (( optsize /= ( 1024 * 1024 ) ))
   elif [[ $label_opt ]]; then
-    (( optsize = 32768 ))
+    (( optsize = 8192 ))
   else
     (( optsize = 0 ))
   fi

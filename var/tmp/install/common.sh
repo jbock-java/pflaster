@@ -81,7 +81,7 @@ choose() {
   choice=$(getarg pf.$what)
   if [[ $choice ]]; then
     jqi ".$what = \"$choice\""
-    echo "$what=$choice preselected"
+    echo "$what=$choice specified via command line"
     return
   elif [[ -f $installbase/profile.json ]] && jq -e "has(\"$what\")" $installbase/profile.json > /dev/null; then
     choice=$(jq -r ".$what" $installbase/profile.json)
@@ -195,9 +195,16 @@ get_config() {
 
 configure_disk() {
   local path disks REPLY lsblk_printed
+  disks=$(get_profile .disk)
+  if [[ $disks ]]; then
+    read -rp "Installation target $disks is configured. Keep it? [Y/n] "
+    if [[ -z $REPLY || $REPLY =~ [Yy] ]]; then
+      return
+    fi
+  fi
   disks=$(get_disks)
   disks=${disks% }
-  while true; do
+  while :; do
     if [[ -z ${disks// /} ]]; then
       echo "FATAL: no disks"
       return 1
@@ -207,7 +214,8 @@ configure_disk() {
     else
       [[ $lsblk_printed ]] || { lsblk ; lsblk_printed=1 ; }
       read -r -p "Please choose disk for installation [${disks// /|}]: "
-      path=$(get_path $REPLY) || continue
+      path=$(get_path $REPLY)
+      [[ $path ]] || continue
       jqi ".disk = \"$path\""
       return 0
     fi
