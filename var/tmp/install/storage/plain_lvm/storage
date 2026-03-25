@@ -75,6 +75,7 @@ create_partitions_tasks() {
   done
   (( homesize >= 1024 )) || return
   (( swapsize >= 1024 || ( swapsize = 0 ) ))
+  (( homesize + swapsize + rootsize + 64 <= pvrootsize )) || return
   acc=$(jm "$acc" task=wipe dev=$(by_partlabel EFISYS) t=efi label=$label_efi)
   acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname name=$label_root)
   acc=$(jm "$acc" task=create size=$homesize t=ext4 vgname=$vgname name=$label_home)
@@ -85,8 +86,8 @@ create_partitions_tasks() {
 wipe() {
   local REPLY
   while :; do
-    echo "The installer will erase all data on $(get_disk)."
-    read -rp "Is this OK? [y/N] "
+    echo "THE INSTALLER WILL NOW ERASE ALL DATA ON $(get_disk)."
+    read -rp "IS THIS OK? [y/N] "
     if [[ $REPLY =~ [yY] ]]; then
       break
     elif [[ $REPLY =~ [nN] ]]; then
@@ -100,24 +101,26 @@ wipe() {
 }
 
 sensible_sizes() {
-  local pvrootsize homesize swapsize vgname label_home
+  local pvrootsize homesize swapsize vgname label_home label_swap
   swapsize=$(get_ram_mb) || return
   (( swapsize += 2048 ))
   vgname=$(get_config .storage.plain_lvm.vgname) || return
   label_home=$(get_config .storage.plain_lvm.partition.home) || return
   [[ -e /dev/mapper/$vgname-$label_home ]] || return
   pvrootsize=$(get_pvrootsize)
+  label_swap=$(get_config .storage.plain_lvm.partition.swap) || return
   homesize=$(lvs $vgname --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_home\").lv_size" | sed -E 's/^(.*)B$/\1/')
   (( homesize /= ( 1024 * 1024 ) ))
   (( rootsize = 65536 ))
   while (( homesize + rootsize + swapsize + 64 > pvrootsize )); do
     (( rootsize -= 1024 ))
   done
-  if (( rootsize < 16384 )); then
-    (( rootsize += swapsize ))
-    (( swapsize = 0 ))
-  fi
+  while (( rootsize < 8192 )); do
+    (( rootsize += 64 ))
+    (( swapsize -= 64 ))
+  done
   (( rootsize >= 8192 )) || return
+  (( swapsize >= 1024 )) || return
   jq -cM -n "{root:$rootsize,swap:$swapsize,home:$homesize}"
 }
 
@@ -141,13 +144,7 @@ preserve_home_tasks() {
     acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname name=$label_root)
   fi
   acc=$(jm "$acc" task=drop vgname=$vgname name=$label_swap)
-  if (( swapsize > 0 )); then
-    if [[ -e /dev/mapper/$vgname-$label_swap ]]; then
-      acc=$(jm "$acc" task=preserve t=swap dev=/dev/mapper/$vgname-$label_swap)
-    else
-      acc=$(jm "$acc" task=create size=$swapsize t=swap vgname=$vgname)
-    fi
-  fi
+  acc=$(jm "$acc" task=create size=$swapsize t=swap vgname=$vgname name=$label_swap)
   jq -cM ".[]" <<< "$acc"
 }
 

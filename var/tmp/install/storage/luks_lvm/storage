@@ -51,13 +51,16 @@ create_basic_partitions() {
 }
 
 create_partitions_tasks() {
-  local pvrootsize rootsize homesize optsize label_home label_opt label_root label_efi pvname vgname acc="[]"
+  local pvrootsize rootsize homesize optsize swapsize label_home label_opt label_root label_efi label_swap pvname vgname acc="[]"
+  swapsize=$(get_ram_mb) || return
+  (( swapsize += 2048 ))
   pvrootsize=$(get_pvrootsize)
   pvname=$(get_config .storage.luks_lvm.pvname) || return
   vgname=$(get_config .storage.luks_lvm.vgname) || return
   label_home=$(get_config .storage.luks_lvm.partition.home) || return
   label_opt=$(get_config .storage.luks_lvm.partition.opt) || return
   label_root=$(get_config .storage.luks_lvm.partition.root) || return
+  label_swap=$(get_config .storage.luks_lvm.partition.swap) || return
   label_efi=$(get_config .storage.luks_lvm.partition.efi) || return
   if [[ $label_opt ]] && (( pvrootsize > 131072 )); then
     (( optsize = 8192 ))
@@ -68,15 +71,23 @@ create_partitions_tasks() {
   (( rootsize > 32768 && ( rootsize = 32768 ) ))
   (( rootsize < 8192 && ( rootsize = 8192 ) ))
   (( homesize = pvrootsize / 2 ))
-  while (( homesize + optsize + rootsize + 64 > pvrootsize )); do
-    (( homesize -= 16 ))
-    (( rootsize > 9216 && ( rootsize -= 16 ) ))
+  while (( homesize + optsize + swapsize + rootsize + 512 > pvrootsize )); do
+    (( homesize -= 64 ))
+    (( rootsize > 9216 && ( rootsize -= 64 ) ))
+  done
+  while (( homesize < 8192 )); do
+    (( homesize += 64 ))
+    (( swapsize -= 64 ))
   done
   (( homesize > 262144 && ( homesize = 262144 ) ))
+  (( rootsize >= 8192 )) || return
   (( homesize >= 1024 )) || return
+  (( swapsize >= 1024 )) || return
+  (( homesize + rootsize + optsize + swapsize + 512 <= pvrootsize )) || return
   acc=$(jm "$acc" task=wipe dev=$(by_partlabel EFISYS) t=efi label=$label_efi)
   acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname name=$label_root)
   acc=$(jm "$acc" task=create size=$homesize t=ext4 vgname=$vgname name=$label_home)
+  acc=$(jm "$acc" task=create size=$swapsize t=swap vgname=$vgname name=$label_swap)
   if [[ $label_opt ]]; then
     acc=$(jm "$acc" task=create size=$optsize t=ext4 vgname=$vgname name=$label_opt)
   fi
@@ -100,7 +111,9 @@ ask_existing_lukskey() {
 }
 
 sensible_sizes() {
-  local pvrootsize homesize optsize vgname label_home label_opt
+  local pvrootsize homesize swapsize optsize vgname label_home label_opt
+  swapsize=$(get_ram_mb) || return
+  (( swapsize += 2048 ))
   vgname=$(get_config .storage.luks_lvm.vgname) || return
   label_home=$(get_config .storage.luks_lvm.partition.home) || return
   label_opt=$(get_config .storage.luks_lvm.partition.opt) || return
@@ -117,30 +130,38 @@ sensible_sizes() {
   fi
   (( homesize /= ( 1024 * 1024 ) ))
   (( rootsize = 32768 ))
-  while (( homesize + rootsize + optsize + 64 > pvrootsize )); do
+  while (( homesize + rootsize + optsize + swapsize + 512 > pvrootsize )); do
     (( rootsize -= 1024 ))
   done
-  if (( rootsize < 16384 )); then
+  if (( rootsize < 16384 )) && [[ ! -e /dev/mapper/$vgname-$label_opt ]]; then
     (( rootsize += optsize ))
     (( optsize = 0 ))
   fi
+  while (( rootsize < 8192 )); do
+    (( rootsize += 64 ))
+    (( swapsize -= 64 ))
+  done
   (( rootsize >= 8192 )) || return
-  jq -cM -n "{root:$rootsize,opt:$optsize,home:$homesize}"
+  (( swapsize >= 1024 )) || return
+  (( homesize + rootsize + optsize + swapsize + 512 <= pvrootsize )) || return
+  jq -cM -n "{root:$rootsize,swap:$swapsize,opt:$optsize,home:$homesize}"
 }
 
 preserve_home_tasks() {
-  local pvroot luks_root efisys label_home label_opt label_root label_efi pvname vgname rootsize optsize sizes acc="[]"
+  local pvroot luks_root efisys label_home label_swap label_opt label_root label_efi pvname vgname rootsize swapsize optsize sizes acc="[]"
   pvname=$(get_config .storage.luks_lvm.pvname) || return
   vgname=$(get_config .storage.luks_lvm.vgname) || return
   label_home=$(get_config .storage.luks_lvm.partition.home) || return
   label_opt=$(get_config .storage.luks_lvm.partition.opt)
   label_root=$(get_config .storage.luks_lvm.partition.root) || return
   label_efi=$(get_config .storage.luks_lvm.partition.efi) || return
+  label_swap=$(get_config .storage.luks_lvm.partition.swap) || return
   efisys=$(blkid --label $label_efi) || return
   pvroot=$(blkid --label $pvname) || return
   [[ -e /dev/mapper/$vgname-$label_home ]] || return
   sizes=$(sensible_sizes) || return
   rootsize=$(jq -r ".root | select(. != null)" <<< "$sizes")
+  swapsize=$(jq -r ".swap | select(. != null)" <<< "$sizes")
   optsize=$(jq -r ".opt | select(. != null)" <<< "$sizes")
   acc=$(jm "$acc" task=wipe dev=$efisys t=efi label=$label_efi)
   if [[ -e /dev/mapper/$vgname-$label_root ]]; then
@@ -154,9 +175,11 @@ preserve_home_tasks() {
     else
       acc=$(jm "$acc" task=create size=$optsize t=ext4 vgname=$vgname name=$label_opt)
     fi
-  else
+  elif [[ -n $label_opt && -e /dev/mapper/$vgname-$label_opt ]]; then
     acc=$(jm "$acc" task=drop vgname=$vgname name=$label_opt)
   fi
+  acc=$(jm "$acc" task=drop vgname=$vgname name=$label_swap)
+  acc=$(jm "$acc" task=create size=$swapsize t=swap vgname=$vgname name=$label_swap)
   acc=$(jm "$acc" task=preserve dev=/dev/mapper/$vgname-$label_home t=ext4 label=$vgname-$label_home)
   jq -cM ".[]" <<< "$acc"
 }
@@ -164,8 +187,8 @@ preserve_home_tasks() {
 wipe() {
   local REPLY
   while :; do
-    echo "The installer will erase all data on $(get_disk)."
-    read -rp "Is this OK? [y/N] "
+    echo "THE INSTALLER WILL NOW ERASE ALL DATA ON $(get_disk)."
+    read -rp "IS THIS OK? [y/N] "
     if [[ $REPLY =~ [yY] ]]; then
       break
     elif [[ $REPLY =~ [nN] ]]; then

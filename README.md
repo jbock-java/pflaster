@@ -9,10 +9,12 @@
 ### Goals
 
 1. The user chooses storage profile and software selection.
-2. Have a storage profile that [support LUKS devices that are unlocked outside the installer](https://bugzilla.redhat.com/show_bug.cgi?id=2019455)
-3. Have a storage profile that supports automatic disk unlocking via tpm.
-4. systemd-boot by default
-5. The installer will pause and ask for confirmation, before making any changes to the partitioning.
+1. Have a storage profile that [support LUKS devices that are unlocked outside the installer](https://bugzilla.redhat.com/show_bug.cgi?id=2019455)
+1. Have a storage profile that supports automatic disk unlocking via tpm.
+1. systemd-boot by default
+1. [zswap](https://chrisdown.name/2026/03/24/zswap-vs-zram-when-to-use-what.html) by default, no systemd-oomd
+1. Before making any changes on disk, the installer will pause and ask for confirmation.
+1. Minimal installation should be possible with just 20GB of disk space.
 
 ### Architectural overview
 

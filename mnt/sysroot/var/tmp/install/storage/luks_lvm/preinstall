@@ -13,24 +13,29 @@ configure_crypttab() {
 }
 
 print_fstab() {
-  local label_home label_opt label_root label_efi uuid_home uuid_root uuid_opt uuid_efi vgname
+  local label_home label_opt label_root label_efi label_swap uuid_home uuid_root uuid_opt uuid_efi uuid_swap vgname
   label_home=$(get_config .storage.luks_lvm.partition.home)
   label_opt=$(get_config .storage.luks_lvm.partition.opt)
   label_root=$(get_config .storage.luks_lvm.partition.root)
   label_efi=$(get_config .storage.luks_lvm.partition.efi)
+  label_swap=$(get_config .storage.luks_lvm.partition.swap)
   vgname=$(get_config .storage.luks_lvm.vgname)
   uuid_efi=$(get_uuid $label_efi)
   uuid_root=$(get_uuid $vgname-$label_root)
   uuid_opt=$(get_uuid $vgname-$label_opt)
+  uuid_swap=$(get_uuid $vgname-$label_swap)
   uuid_home=$(get_uuid $vgname-$label_home)
   [[ $uuid_efi ]] || return
   [[ $uuid_root ]] || return
   [[ $uuid_home ]] || return
-  [[ $uuid_opt ]] || return
+  [[ $uuid_swap ]] || return
   echo "UUID=$uuid_efi  /boot/efi vfat umask=0077,shortname=winnt 0 2"
   echo "UUID=$uuid_root /         ext4 defaults 1 2"
   echo "UUID=$uuid_home /home     ext4 defaults 1 2"
-  echo "UUID=$uuid_opt  /opt      ext4 defaults 1 2"
+  echo "UUID=$uuid_swap swap      swap defaults 0 0"
+  if [[ $uuid_opt ]]; then
+    echo "UUID=$uuid_opt  /opt      ext4 defaults 1 2"
+  fi
 }
 
 configure_fstab() {

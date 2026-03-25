@@ -7,6 +7,7 @@
       "partition": {
         "efi": "EFISYS",
         "root": "root",
+        "swap": "swap",
         "home": "home"
       },
       "packages": [

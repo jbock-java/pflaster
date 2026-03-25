@@ -110,6 +110,7 @@ do_postinstall() {
   run configure_locale || return
   run configure_sdboot || return
   run apply_hostname_config || return
+  run configure_zswap || return
   run set_target_firstboot || return
 }
 

@@ -17,6 +17,9 @@ firstboot() {
     fi
   done
   systemctl enable anyboot.service || return
+  if is_swap_on_drive; then
+    systemctl disable systemd-oomd || return
+  fi
   run set_target_anyboot || return
   if [[ -f /tmp/stop ]]; then
     echo "Halted."
