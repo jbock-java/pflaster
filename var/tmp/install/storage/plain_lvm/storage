@@ -66,14 +66,15 @@ create_partitions_tasks() {
   (( rootsize = 32768 ))
   (( homesize = ( pvrootsize * 4 ) / 5 ))
   while (( homesize + swapsize + rootsize + 64 > pvrootsize )); do
-    (( homesize -= 16 ))
-    (( rootsize > 9216 && ( rootsize -= 16 ) ))
+    (( homesize -= 64 ))
+    (( rootsize > 9216 && ( rootsize -= 64 ) ))
   done
-  if (( homesize < 16384 )); then
-    (( homesize += swapsize ))
-    (( swapsize = 0 ))
-  fi
+  while (( homesize < 8192 )); do
+    (( homesize += 64 ))
+    (( swapsize -= 64 ))
+  done
   (( homesize >= 1024 )) || return
+  (( swapsize >= 1024 || ( swapsize = 0 ) ))
   acc=$(jm "$acc" task=wipe dev=$(by_partlabel EFISYS) t=efi label=$label_efi)
   acc=$(jm "$acc" task=create size=$rootsize t=ext4 vgname=$vgname name=$label_root)
   acc=$(jm "$acc" task=create size=$homesize t=ext4 vgname=$vgname name=$label_home)

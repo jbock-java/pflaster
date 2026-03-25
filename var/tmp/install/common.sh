@@ -320,9 +320,17 @@ set_nopasswd() {
 }
 
 configure_sdboot() {
+  local conf
   findmnt -n /boot/efi &> /dev/null || return
   mkdir -p /boot/efi/loader
   echo "timeout 5" >> /boot/efi/loader/loader.conf
+  # if there is a swap partition, use zswap
+  if [[ $(lsblk -n --filter "FSTYPE == \"swap\"" -o KNAME) ]]; then
+    for conf in /boot/efi/loader/entries/*x86_64.conf; do
+      [[ -f $conf ]] || continue
+      sed -i -E "/^options\b/ s/\$/ zswap.enabled=1 zswap.shrinker_enabled=1 zswap.compressor=lz4 zswap.max_pool_percent=25/" $conf
+    done
+  fi
 }
 
 set_timezone() {

@@ -408,7 +408,9 @@ configure_locale() {
       return
     fi
   fi
-  echo "Starting locale selection. You can accept with Return when an arrow appears."
+  echo -n "Please wait..."
+  localectl list-locales &> /dev/null # warm-up
+  printf "\r\033[KStarting locale selection. You can accept with Return when an arrow appears.\n"
   echo "Try \"de_de\" or \"en_us\"."
   locale_user_read || return
   [[ -f /tmp/localetree.txt ]] || return
@@ -482,7 +484,9 @@ configure_timezone() {
       return
     fi
   fi
-  echo "Starting timezone selection. You can accept with Return when an arrow appears."
+  echo -n "Please wait..."
+  timedatectl list-timezones &> /dev/null # warm-up
+  printf "\r\033[KStarting timezone selection. You can accept with Return when an arrow appears.\n"
   echo "Try \"canada/eastern\" or \"europe/berlin\"."
   tz_user_read || return
   [[ -f /tmp/tztree.txt ]] || return
