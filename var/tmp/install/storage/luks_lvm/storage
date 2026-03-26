@@ -63,7 +63,7 @@ create_partitions_tasks() {
   label_swap=$(get_config .storage.luks_lvm.partition.swap) || return
   label_efi=$(get_config .storage.luks_lvm.partition.efi) || return
   if [[ $label_opt ]] && (( pvrootsize > 131072 )); then
-    (( optsize = 8192 ))
+    (( optsize = 4096 ))
   else
     (( optsize = 0 ))
   fi
@@ -120,20 +120,20 @@ sensible_sizes() {
   [[ -e /dev/mapper/$vgname-$label_home ]] || return
   pvrootsize=$(get_pvrootsize)
   homesize=$(lvs $vgname --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_home\").lv_size" | sed -E 's/^(.*)B$/\1/')
-  if [[ -e /dev/mapper/$vgname-$label_opt ]]; then
+  if [[ -z $label_opt ]]; then
+    (( optsize = 0 ))
+  elif [[ -e /dev/mapper/$vgname-$label_opt ]]; then
     optsize=$(lvs $vgname --units b --reportformat json_std | jq -r ".report[0].lv[]|select(.lv_name==\"$label_opt\").lv_size" | sed -E 's/^(.*)B$/\1/')
     (( optsize /= ( 1024 * 1024 ) ))
-  elif [[ $label_opt ]]; then
-    (( optsize = 8192 ))
   else
-    (( optsize = 0 ))
+    (( optsize = 4096 ))
   fi
   (( homesize /= ( 1024 * 1024 ) ))
   (( rootsize = 32768 ))
   while (( homesize + rootsize + optsize + swapsize + 512 > pvrootsize )); do
     (( rootsize -= 1024 ))
   done
-  if (( rootsize < 16384 )) && [[ ! -e /dev/mapper/$vgname-$label_opt ]]; then
+  if (( rootsize < 16384 && optsize > 0 )) && [[ ! -e /dev/mapper/$vgname-$label_opt ]]; then
     (( rootsize += optsize ))
     (( optsize = 0 ))
   fi

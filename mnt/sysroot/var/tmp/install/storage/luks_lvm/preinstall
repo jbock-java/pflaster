@@ -22,7 +22,6 @@ print_fstab() {
   vgname=$(get_config .storage.luks_lvm.vgname)
   uuid_efi=$(get_uuid $label_efi)
   uuid_root=$(get_uuid $vgname-$label_root)
-  uuid_opt=$(get_uuid $vgname-$label_opt)
   uuid_swap=$(get_uuid $vgname-$label_swap)
   uuid_home=$(get_uuid $vgname-$label_home)
   [[ $uuid_efi ]] || return
@@ -33,7 +32,9 @@ print_fstab() {
   echo "UUID=$uuid_root /         ext4 defaults 1 2"
   echo "UUID=$uuid_home /home     ext4 defaults 1 2"
   echo "UUID=$uuid_swap swap      swap defaults 0 0"
-  if [[ $uuid_opt ]]; then
+  if [[ $label_opt ]]; then
+    uuid_opt=$(get_uuid $vgname-$label_opt)
+    [[ $uuid_opt ]] || return
     echo "UUID=$uuid_opt  /opt      ext4 defaults 1 2"
   fi
 }

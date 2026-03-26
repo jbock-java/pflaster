@@ -21,6 +21,7 @@ firstboot() {
     systemctl disable systemd-oomd || return
   fi
   run set_target_anyboot || return
+  rm -f /etc/sysctl.d/10-kernel-quiet.conf
   if [[ -f /tmp/stop ]]; then
     echo "Halted."
     sleep inf

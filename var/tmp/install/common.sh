@@ -446,8 +446,7 @@ storage_task_create() {
   lvcreate -qy --size ${size}M --name $name $vgname || return
   case $t in
     swap)
-      mkswap /dev/mapper/$vgname-$name
-      swaplabel -L $vgname-$name /dev/mapper/$vgname-$name
+      mkswap -L $vgname-$name /dev/mapper/$vgname-$name || return
       ;;
     ext4)
       mkfs.ext4 -q -L $vgname-$name /dev/mapper/$vgname-$name <<< y || return
