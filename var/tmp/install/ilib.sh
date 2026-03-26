@@ -264,14 +264,14 @@ kb_tree() {
   if (( len == 0 )); then
     return 1
   else
-    kb=$(ls -1 /usr/lib/kbd/keymaps/xkb | sed 's/\.map\.gz$//' | grep "^$1")
-    sed -n -E "s/^.{$len}(.).*/\\1/p" <<< "$kb" | sort -u | tr -d '\n'
-    grep -q ^$1$ <<< "$kb"
+    kb=$(ls -1 /usr/lib/kbd/keymaps/xkb | sed 's/\.map\.gz$//' | grep -i "^$1")
+    sed -n -E "s/^.{$len}(.).*/\\1/p" <<< "${kb,,}" | sort -u | tr -d '\n'
+    grep -q ^$1$ <<< "${kb,,}"
   fi
 }
 
 kb_user_read() {
-  local result mychar buf buftest
+  local result mychar buf
   rm -f /tmp/kbtree.txt
   while :; do
     read -s -N1 mychar
@@ -298,7 +298,18 @@ kb_user_read() {
         break
       fi
     elif [[ $mychar =~ [a-z0-9_-] ]]; then
-      buf=$buf$mychar
+      if result=$(kb_tree "$buf$mychar"); then
+        buf=$buf$mychar
+        printf "\r\033[K$buf -> [$result]"
+        continue
+      elif [[ -z $result ]]; then
+        continue
+      elif (( ${#result} != 1 )); then
+        buf=$buf$mychar
+        printf "\r\033[K$buf [$result]"
+        continue
+      fi
+      buf=$buf$mychar$result
       while :; do
         if result=$(kb_tree "$buf"); then
           printf "\r\033[K$buf -> [$result]"
@@ -353,7 +364,7 @@ locale_tree() {
 }
 
 locale_user_read() {
-  local result mychar buf buftest
+  local result mychar buf
   rm -f /tmp/localetree.txt
   while :; do
     read -s -N1 mychar
@@ -381,7 +392,18 @@ locale_user_read() {
         break
       fi
     elif [[ $mychar =~ [a-z0-9._@+-] ]]; then
-      buf=$buf$mychar
+      if result=$(locale_tree "$buf$mychar"); then
+        buf=$buf$mychar
+        printf "\r\033[K$buf -> [$result]"
+        continue
+      elif [[ -z $result ]]; then
+        continue
+      elif (( ${#result} != 1 )); then
+        buf=$buf$mychar
+        printf "\r\033[K$buf [$result]"
+        continue
+      fi
+      buf=$buf$mychar$result
       while :; do
         if result=$(locale_tree "$buf"); then
           printf "\r\033[K$buf -> [$result]"
@@ -429,7 +451,7 @@ tz_tree() {
 }
 
 tz_user_read() {
-  local result mychar buf buftest
+  local result mychar buf
   rm -f /tmp/tztree.txt
   while :; do
     read -s -N1 mychar
@@ -457,7 +479,18 @@ tz_user_read() {
         break
       fi
     elif [[ $mychar =~ [a-z0-9/_+-] ]]; then
-      buf=$buf$mychar
+      if result=$(tz_tree "$buf$mychar"); then
+        buf=$buf$mychar
+        printf "\r\033[K$buf -> [$result]"
+        continue
+      elif [[ -z $result ]]; then
+        continue
+      elif (( ${#result} != 1 )); then
+        buf=$buf$mychar
+        printf "\r\033[K$buf [$result]"
+        continue
+      fi
+      buf=$buf$mychar$result
       while :; do
         if result=$(tz_tree "$buf"); then
           printf "\r\033[K$buf -> [$result]"
