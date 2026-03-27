@@ -322,7 +322,7 @@ set_nopasswd() {
 is_swap_on_drive() {
   local path
   for path in $(lsblk -n --filter "FSTYPE == \"swap\"" -o PATH); do
-    if ! zramctl -n | grep -q ^$path; then
+    if ! zramctl -n | grep -q "^$path\s"; then
       return 0
     fi
   done
