@@ -208,72 +208,76 @@ tz_user_read() {
 generic_tree() {
   local matches len=${#2}
   if (( len == 0 )); then
+    sed -n -E "s/^(\S).*/\1/p" <<< "$1" | sort -u | tr -d '\n'
     return 1
   else
     matches=$(grep -i "^$2" <<< "$1")
     [[ $matches ]] || return
-    sed -n -E "s/^.{$len}(.).*/\\1/p" <<< "$matches" | sort -u | tr -d '\n'
+    sed -n -E "s/^.{$len}(.).*/\1/p" <<< "$matches" | sort -u | tr -d '\n'
     grep -q "^$2$" <<< "$matches"
   fi
 }
 
 select_from() {
-  local result mychar buf
+  local result mychar buf display
   rm -f /tmp/uiresult.txt
+  display="[$(generic_tree "$1")]"
   while :; do
+    printf "\r\033[K$display"
     read -s -N1 mychar
-    mychar=${mychar,,}
     if [[ $mychar = $'\177' ]]; then
       if [[ $buf ]]; then
         buf=${buf:0:$(( ${#buf} - 1 ))}
       fi
       if result=$(generic_tree "$1" "$buf"); then
-        printf "\r\033[K$buf -> [$result]"
+        display="$buf -> [$result]"
       elif [[ $buf ]]; then
-        printf "\r\033[K$buf [$result]"
+        display="$buf [$result]"
       else
-        printf "\r\033[K"
+        display="[$(generic_tree "$1")]"
       fi
     elif [[ $mychar = $'\33' ]]; then
-      echo us > /tmp/uiresult.txt
-      printf "\r\033[Kus\n"
-      break
+      echo
+      return 1
     elif [[ $mychar = $'\12' ]]; then
       if generic_tree "$1" "$buf" > /dev/null; then
         echo $buf > /tmp/uiresult.txt
-        printf "\r\033[K$buf\n"
+        display="$buf\n"
         break
       fi
     elif [[ $mychar =~ [a-z0-9_-] ]]; then
       if result=$(generic_tree "$1" "$buf$mychar"); then
         buf=$buf$mychar
-        printf "\r\033[K$buf -> [$result]"
+        display="$buf -> [$result]"
         continue
       elif [[ -z $result ]]; then
         continue
       elif (( ${#result} != 1 )); then
         buf=$buf$mychar
-        printf "\r\033[K$buf [$result]"
+        display="$buf [$result]"
         continue
       fi
       buf=$buf$mychar$result
       while :; do
         if result=$(generic_tree "$1" "$buf"); then
-          printf "\r\033[K$buf -> [$result]"
+          display="$buf -> [$result]"
           break
         elif (( ${#result} == 1 )); then
           buf=$buf$result
         else
-          printf "\r\033[K$buf [$result]"
+          display="$buf [$result]"
           break
         fi
       done
     fi
   done
+  printf "\r\033[K$display"
+  [[ -f /tmp/uiresult.txt ]] || return
+  grep -q "^$(< /tmp/uiresult.txt)$" <<< "$1"
 }
 
 choose() {
-  local what="$1" REPLY choice options=() options_nl
+  local what="$1" REPLY choice col=0 options=() options_nl
   [[ $what ]] || return
   choice=$(getarg pf.$what)
   if [[ $choice ]]; then
@@ -282,12 +286,15 @@ choose() {
     return
   elif [[ -f $installbase/profile.json ]] && jq -e "has(\"$what\")" $installbase/profile.json > /dev/null; then
     choice=$(jq -r ".$what" $installbase/profile.json)
-    read -rp "$what $choice is configured. Keep it? [Y/n] "
-    [[ -z $REPLY || $REPLY =~ [yY] ]] && return
+    if [[ $choice ]]; then
+      read -rp "$what $choice is configured. Keep it? [Y/n] "
+      [[ -z $REPLY || $REPLY =~ [yY] ]] && return
+    fi
   fi
   for choice in $(jq -r ".$what | keys[]" $installbase/config.json); do
     options+=($choice)
   done
+  options_nl="$(tr ' ' '\n' <<< ${options[@]})"
   case ${#options[@]} in
     0)
       echo "ERROR: Got nothing to choose from."
@@ -299,7 +306,6 @@ choose() {
       return
       ;;
     *)
-      local col=0
       for choice in "${options[@]}"; do
         (( col < ${#choice} && ( col = ${#choice} ) ))
       done
@@ -307,10 +313,12 @@ choose() {
       for choice in "${options[@]}"; do
         printf "  %-$((col))s - %s\n" $choice "$(jq -r .$what.$choice.banner $installbase/config.json)"
       done
-      echo "Starting $what selection. You can accept with Return when an arrow appears."
-      select_from "$(tr ' ' '\n' <<< ${options[@]})" || return
-      [[ -f /tmp/uiresult.txt ]] || return
-      jqi ".$what = \"$(< /tmp/uiresult.txt)\""
+      while :; do
+        echo "Starting $what selection. You can accept with Return when an arrow appears."
+        select_from "$options_nl" || continue
+        jqi ".$what = \"$(< /tmp/uiresult.txt)\""
+        break
+      done
       ;;
   esac
 }
