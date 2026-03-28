@@ -1,3 +1,7 @@
+# ARCHIVED ON 2026-03-28 :flushed: :skull: :finnadie:
+
+:point_up: The project is now hosted [at codeberg](https://codeberg.org/kaputtix/pflaster).
+
 ### WARNING! This is an EXPERIMENTAL fedora installer.
 
 | :warning: Running this may :rotating_light: **erase all your data** :rotating_light: :ambulance: :ambulance: |
