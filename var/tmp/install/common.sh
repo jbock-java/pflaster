@@ -75,65 +75,6 @@ jqi() {
   mv $tmpfile $profile
 }
 
-choose() {
-  local what="$1" REPLY choice options=()
-  [[ $what ]] || return
-  choice=$(getarg pf.$what)
-  if [[ $choice ]]; then
-    jqi ".$what = \"$choice\""
-    echo "$what=$choice specified via command line"
-    return
-  elif [[ -f $installbase/profile.json ]] && jq -e "has(\"$what\")" $installbase/profile.json > /dev/null; then
-    choice=$(jq -r ".$what" $installbase/profile.json)
-    read -rp "$what $choice is configured. Keep it? [Y/n] "
-    [[ -z $REPLY || $REPLY =~ [yY] ]] && return
-  fi
-  for choice in $(jq -r ".$what | keys[]" $installbase/config.json); do
-    options+=($choice)
-  done
-  case ${#options[@]} in
-    0)
-      echo "ERROR: Got nothing to choose from."
-      return 1
-      ;;
-    1)
-      jqi ".$what = \"${options[@]}\""
-      echo "$what=${options[@]} is the only option"
-      return
-      ;;
-    *)
-      local col=0
-      for choice in "${options[@]}"; do
-        (( col < ${#choice} && ( col = ${#choice} ) ))
-      done
-      while true; do
-        echo "$what:"
-        for choice in "${options[@]}"; do
-          printf "  %-$((col))s - %s\n" $choice "$(jq -r .$what.$choice.banner $installbase/config.json)"
-        done
-        read -rp "Choose $what (or prefix): "
-        [[ $REPLY ]] || continue
-        local matches=0 remember
-        for choice in "${options[@]}"; do
-          if [[ $choice = ${REPLY}* ]]; then
-            (( matches++ ))
-            remember=$choice
-          fi
-        done
-        if (( matches == 0 )); then
-          echo "No such $what: $REPLY"
-        elif (( matches == 1 )); then
-          jqi ".$what = \"$remember\""
-          echo "$what=$remember selected"
-          return 0
-        else
-          echo "Insufficient prefix: $REPLY"
-        fi
-      done
-      ;;
-  esac
-}
-
 get_profile() {
   local result
   [[ $1 ]] || return

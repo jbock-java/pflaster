@@ -286,8 +286,8 @@ configure_keyboard() {
   echo "Starting keyboard selection. You can accept with Return when an arrow appears."
   echo "Try \"de\", \"us\" or \"de-us\"."
   kb_user_read || return
-  [[ -f /tmp/kbtree.txt ]] || return
-  jqi ".keyboard = \"$(< /tmp/kbtree.txt)\""
+  [[ -f /tmp/uiresult.txt ]] || return
+  jqi ".keyboard = \"$(< /tmp/uiresult.txt)\""
   also_use_keyboard
 }
 
@@ -307,8 +307,8 @@ configure_locale() {
   printf "\r\033[KStarting locale selection. You can accept with Return when an arrow appears.\n"
   echo "Try \"de_de\" or \"en_us\"."
   locale_user_read || return
-  [[ -f /tmp/localetree.txt ]] || return
-  jqi ".lang = \"$(< /tmp/localetree.txt)\""
+  [[ -f /tmp/uiresult.txt ]] || return
+  jqi ".lang = \"$(< /tmp/uiresult.txt)\""
 }
 
 configure_timezone() {
@@ -327,8 +327,8 @@ configure_timezone() {
   printf "\r\033[KStarting timezone selection. You can accept with Return when an arrow appears.\n"
   echo "Try \"canada/eastern\" or \"europe/berlin\"."
   tz_user_read || return
-  [[ -f /tmp/tztree.txt ]] || return
-  jqi ".timezone = \"$(< /tmp/tztree.txt)\""
+  [[ -f /tmp/uiresult.txt ]] || return
+  jqi ".timezone = \"$(< /tmp/uiresult.txt)\""
 }
 
 configure() {
